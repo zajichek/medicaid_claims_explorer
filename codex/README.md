@@ -1,0 +1,1 @@
+These files were built by Codex when trying to build an app. I may use some ideas from here, but it was way overengineered upfront and hard to trace (and exploded my machine), so I'm going to build the app more intentionally.

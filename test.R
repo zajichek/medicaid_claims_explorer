@@ -24,6 +24,16 @@ dbGetQuery(
   "SELECT CLAIM_FROM_MONTH AS Month, COUNT(1) AS RowCount, SUM(TOTAL_PAID) AS TotalPaid FROM dataset GROUP BY CLAIM_FROM_MONTH ORDER BY CLAIM_FROM_MONTH"
 )
 
+dbGetQuery(
+  con,
+  "SELECT COUNT(1), SUM(TOTAL_PAID) AS TotalPaid FROM dataset WHERE BILLING_PROVIDER_NPI_NUM IS NULL OR SERVICING_PROVIDER_NPI_NUM IS NULL"
+)
+
+dbGetQuery(
+  con,
+  "SELECT COUNT(1), SUM(TOTAL_PAID) AS TotalPaid FROM dataset WHERE BILLING_PROVIDER_NPI_NUM IS NOT NULL AND SERVICING_PROVIDER_NPI_NUM IS NOT NULL"
+) # <- use these records for meaningful analysis
+
 ## Read from parquet
 
 con2 <- dbConnect(duckdb::duckdb(), dbdir = ":memory:")
