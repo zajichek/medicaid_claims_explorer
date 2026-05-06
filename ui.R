@@ -83,6 +83,10 @@ ui <-
       tags$a(
         "NPI Data",
         href = "https://download.cms.gov/nppes/NPI_Files.html"
+      ),
+      tags$a(
+        "HCPCS Lookup Tables",
+        href = "https://www.cms.gov/medicare/payment/fee-schedules/physician/pfs-relative-value-files/rvu24a"
       )
     ),
 
