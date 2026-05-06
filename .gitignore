@@ -1,3 +1,4 @@
 data/raw/
 data/intermediate/
+claims.rds
 .DS_Store

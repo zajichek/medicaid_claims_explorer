@@ -1,6 +1,6 @@
 # Created: 2026-05-05
 # Author: Alex Zajichek
-# Project: Medicaid Claims Explorer
+# Project: WI Medicaid Claims Explorer
 # Description: Creates and loads global objects accessible to app
 
 # Load packages
@@ -10,11 +10,14 @@ library(bslib)
 library(datamods)
 library(highcharter)
 library(leaflet)
+library(arrow)
 
 ### Import app assets
 
 # Datasets
 providers <- read_rds(file = "data/assets/providers.rds")
+organizations <- read_rds(file = "data/assets/organizations.rds")
+claims <- open_dataset("data/assets/claims") |> collect()
 
 # Map components
 state_outline <- read_rds(file = "data/assets/state_outline.rds")

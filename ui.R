@@ -1,6 +1,6 @@
 # Created: 2026-05-05
 # Author: Alex Zajichek
-# Project: Medicaid Claims Explorer
+# Project: WI Medicaid Claims Explorer
 # Description: Creates the UI objects
 
 ui <-
@@ -25,22 +25,46 @@ ui <-
 
       h2("Filters", style = "text-align:center"),
 
-      # Provider Information
+      # Provider Information (Type I NPI)
       accordion(
         open = FALSE,
         accordion_panel(
-          title = "Provider Information",
+          title = "Individual Providers",
           icon = icon("user-doctor"),
 
-          # Simultaneously filtering on hospital columns
+          # Simultaneously filtering on columns
           select_group_ui(
             id = "providers",
             params = list(
               list(inputId = "NPI", label = "NPI #"),
-              list(inputId = "EntityType", label = "Entity Type"),
-              list(inputId = "Organization", label = "Organization"),
               list(inputId = "LastName", label = "Last Name"),
               list(inputId = "FirstName", label = "First Name"),
+              list(inputId = "Credentials", label = "Credentials"),
+              list(inputId = "TaxonomyCode", label = "Taxonomy"),
+              list(inputId = "City", label = "City"),
+              list(inputId = "Zip", label = "Zip"),
+              list(inputId = "Sex", label = "Sex")
+            ),
+            inline = FALSE
+          )
+        )
+      ),
+
+      # Provider Information (Type II NPI)
+      accordion(
+        open = FALSE,
+        accordion_panel(
+          title = "Organizations",
+          icon = icon("user-doctor"),
+
+          # Simultaneously filtering on columns
+          select_group_ui(
+            id = "organizations",
+            params = list(
+              list(inputId = "NPI", label = "NPI #"),
+              list(inputId = "Name", label = "Name"),
+              list(inputId = "TaxonomyCode", label = "Taxonomy"),
+              list(inputId = "Subpart", label = "Subpart of org?"),
               list(inputId = "City", label = "City"),
               list(inputId = "Zip", label = "Zip")
             ),

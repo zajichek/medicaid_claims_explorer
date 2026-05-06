@@ -1,6 +1,6 @@
 # Created: 2026-05-05
 # Author: Alex Zajichek
-# Project: Medicaid Claims Explorer - Data Prep
+# Project: WI Medicaid Claims Explorer - Data Prep
 # Description: Extracts and stores geometry objects for app
 
 # Load packages
@@ -40,7 +40,7 @@ zip_centroids <-
 
   # Add identifying column
   add_column(
-    Zip = zips_wi$ZCTA5CE10
+    Zip = zips$ZCTA5CE10
   ) |>
 
   # Rename columns

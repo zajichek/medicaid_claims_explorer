@@ -13,28 +13,57 @@ server <-
         data = reactive(providers),
         vars = reactive(c(
           "NPI",
-          "EntityType",
-          "Organization",
           "LastName",
           "FirstName",
+          "Credentials",
+          "TaxonomyCode",
+          "City",
+          "Zip",
+          "Sex"
+        ))
+      )
+
+    # Selected organizations
+    current_organizations <-
+      # Filters the dataset at once
+      select_group_server(
+        id = "organizations",
+        data = reactive(organizations),
+        vars = reactive(c(
+          "NPI",
+          "Name",
+          "TaxonomyCode",
+          "Subpart",
           "City",
           "Zip"
         ))
       )
 
+    # Display the total payment amounts for the selected NPI's
+    output$total_spending <-
+      renderText({
+        claims |>
+
+          # Filter to claims relevant to any of the selected providers
+          filter(
+            BillingProvider %in%
+              c(current_providers()$NPI, current_organizations()$NPI) |
+              ServicingProvider %in%
+                c(current_providers()$NPI, current_organizations()$NPI)
+          ) |>
+
+          # Compute total
+          summarize(
+            PaidAmount = sum(PaidAmount)
+          ) |>
+
+          # Extract it
+          pull("PaidAmount")
+      })
+
     # Show data
     output$provider_table <- DT::renderDataTable({
-      current_providers() |>
-        select(
-          NPI,
-          `Entity Type` = EntityType,
-          Organization,
-          `Last Name` = LastName,
-          `First Name` = FirstName,
-          Address,
-          City,
-          Zip
-        )
+      current_providers()
     })
 
     # Display the map contents

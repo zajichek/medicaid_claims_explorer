@@ -1,6 +1,6 @@
 # Created: 2026-05-05
 # Author: Alex Zajichek
-# Project: Medicaid Claims Explorer - Data Prep
+# Project: WI Medicaid Claims Explorer - Data Prep
 # Description: Creates a local database
 
 # Load packages
