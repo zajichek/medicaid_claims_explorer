@@ -85,8 +85,12 @@ ui <-
         href = "https://download.cms.gov/nppes/NPI_Files.html"
       ),
       tags$a(
-        "HCPCS Lookup Tables",
+        "HCPCS Code Descriptions",
         href = "https://www.cms.gov/medicare/payment/fee-schedules/physician/pfs-relative-value-files/rvu24a"
+      ),
+      tags$a(
+        "HCPCS BETOS Categories",
+        href = "https://data.cms.gov/provider-summary-by-type-of-service/provider-service-classifications/restructured-betos-classification-system/data"
       )
     ),
 

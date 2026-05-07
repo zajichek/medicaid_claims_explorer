@@ -11,26 +11,78 @@ claims <- read_rds(file = "data/assets/claims.rds")
 
 # Import raw lookup table
 hcpcs_lookup <-
-  read_csv(file = "data/raw/PPRRVU24_JAN.csv", skip = 9, guess_max = 10000) |>
+  claims |>
 
-  # Keep a few columns
-  select(
-    HCPCSCode = HCPCS,
-    HCPCSDescription = DESCRIPTION
-  ) |>
-
-  # Unique rows only
+  # Keep unique codes
+  select(HCPCSCode) |>
   distinct() |>
 
-  # Join to keep existing codes in dataset
-  inner_join(
-    y = claims |>
+  # Classify each code type
+  mutate(
+    Type = case_when(
+      str_detect(HCPCSCode, "^[A-Za-z]") ~ 2, # HCPCS Level II
+      TRUE ~ 1 # HCPCS Level I (CPT Codes)
+    )
+  ) |>
 
-      # Keep unique codes
-      select(HCPCSCode) |>
+  # Join to get the descriptor
+  left_join(
+    y = read_csv(
+      file = "data/raw/PPRRVU24_JAN.csv",
+      skip = 9,
+      guess_max = 10000
+    ) |>
+
+      # Keep a few columns
+      select(
+        HCPCSCode = HCPCS,
+        Description = DESCRIPTION
+      ) |>
+
+      # Unique rows only
       distinct(),
     by = "HCPCSCode"
-  ) # ~3114 of 3600 codes in claims dataset accounted for here.
+  ) |>
+
+  # Join to get BETOS categories
+  left_join(
+    y = read_csv(file = paste0("data/raw/RBCS_RY_2025.csv")) |>
+
+      # Filter to the latest assignment for each code
+      filter(RBCS_Latest_Assignment == 1) |>
+
+      # Keep some columns
+      select(
+        HCPCSCode = HCPCS_Cd,
+        Category = RBCS_Cat_Desc,
+        Subcategory = RBCS_Subcat_Desc,
+        Family = RBCS_Family_Desc,
+        MajorProcedureIndicator = RBCS_Major_Ind
+      ),
+    by = "HCPCSCode"
+  ) |>
+
+  # Rename the column
+  rename(Code = HCPCSCode)
 
 # Write to file
 hcpcs_lookup |> write_rds(file = "data/assets/hcpcs_lookup.rds")
+
+## Additional analysis
+
+# 1. How many codes of each type are there?
+table(hcpcs_lookup$Type)
+#   1    2
+# 2125 1499
+
+# 2. How many of each type have a descriptor?
+table(hcpcs_lookup$Type, !is.na(hcpcs_lookup$Description))
+#    FALSE TRUE
+#  1   145 1980
+#  2   365 1134
+
+# 3. How many of each type have a BETOS category?
+table(hcpcs_lookup$Type, !is.na(hcpcs_lookup$Category))
+#    FALSE TRUE
+#  1   136 1989
+#  2   480 1019
