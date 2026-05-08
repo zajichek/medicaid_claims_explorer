@@ -44,7 +44,7 @@ ui <-
         open = FALSE,
         accordion_panel(
           title = "HCPCS Codes",
-          icon = icon("user-doctor"),
+          icon = icon("list"),
 
           # Simultaneously filtering on columns
           select_group_ui(
@@ -72,6 +72,14 @@ ui <-
           title = "Individual Providers",
           icon = icon("user-doctor"),
 
+          # Search as service or billing provider
+          radioButtons(
+            inputId = "provider_search_context",
+            label = "Provider Search Context",
+            choices = c("Billing", "Servicing"),
+            inline = TRUE
+          ),
+
           # Simultaneously filtering on columns
           select_group_ui(
             id = "providers",
@@ -95,7 +103,15 @@ ui <-
         open = FALSE,
         accordion_panel(
           title = "Organizations",
-          icon = icon("user-doctor"),
+          icon = icon("hospital"),
+
+          # Search as service or billing provider
+          radioButtons(
+            inputId = "org_search_context",
+            label = "Provider Search Context",
+            choices = c("Billing", "Servicing"),
+            inline = TRUE
+          ),
 
           # Simultaneously filtering on columns
           select_group_ui(

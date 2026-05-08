@@ -5,6 +5,57 @@
 
 server <-
   function(input, output, session) {
+    # Selected claims records
+    current_claims <-
+      reactive({
+        # Filter on date + code filters
+        temp_claims <-
+          claims |>
+          filter(
+            ClaimMonth %in% current_date_range()$ClaimMonth,
+            HCPCSCode %in% current_codes()$Code
+          )
+
+        # Extract search context
+        temp_prov_context <- input$provider_search_context
+        temp_org_context <- input$org_search_context
+
+        # Conditional logic provider filters
+        if (temp_prov_context == temp_org_context) {
+          # Union of the sets (same search context)
+          if (temp_prov_context == "Billing") {
+            temp_claims |>
+              filter(
+                BillingProvider %in%
+                  current_providers()$NPI |
+                  BillingProvider %in% current_organizations()$NPI
+              )
+          } else {
+            temp_claims |>
+              filter(
+                ServicingProvider %in%
+                  current_providers()$NPI |
+                  ServicingProvider %in% current_organizations()$NPI
+              )
+          }
+        } else {
+          # Intersection (searching for billing and servicing)
+          if (temp_prov_context == "Billing") {
+            temp_claims |>
+              filter(
+                BillingProvider %in% current_providers()$NPI,
+                ServicingProvider %in% current_organizations()$NPI
+              )
+          } else {
+            temp_claims |>
+              filter(
+                ServicingProvider %in% current_providers()$NPI,
+                BillingProvider %in% current_organizations()$NPI
+              )
+          }
+        }
+      })
+
     # Selected date range
     current_date_range <-
       reactive({
@@ -80,15 +131,7 @@ server <-
     # Display the total payment amounts for the selected NPI's
     output$total_spending <-
       renderText({
-        claims |>
-
-          # Filter to claims relevant to any of the selected providers
-          filter(
-            BillingProvider %in%
-              c(current_providers()$NPI, current_organizations()$NPI) |
-              ServicingProvider %in%
-                c(current_providers()$NPI, current_organizations()$NPI)
-          ) |>
+        current_claims() |>
 
           # Compute total
           summarize(
