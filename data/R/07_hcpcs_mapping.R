@@ -17,14 +17,6 @@ hcpcs_lookup <-
   select(HCPCSCode) |>
   distinct() |>
 
-  # Classify each code type
-  mutate(
-    Type = case_when(
-      str_detect(HCPCSCode, "^[A-Za-z]") ~ 2, # HCPCS Level II
-      TRUE ~ 1 # HCPCS Level I (CPT Codes)
-    )
-  ) |>
-
   # Join to get the descriptor
   left_join(
     y = read_csv(
@@ -60,6 +52,18 @@ hcpcs_lookup <-
         MajorProcedureIndicator = RBCS_Major_Ind
       ),
     by = "HCPCSCode"
+  ) |>
+
+  # Classify each code type
+  mutate(
+    Type = case_when(
+      str_detect(HCPCSCode, "^[A-Za-z]") ~ "Level 2", # HCPCS Level II
+      TRUE ~ "Level 1 (CPT)" # HCPCS Level I (CPT Codes)
+    ),
+    CodeDescription = case_when(
+      !is.na(Description) ~ paste0(HCPCSCode, " - ", Description),
+      TRUE ~ HCPCSCode
+    )
   ) |>
 
   # Rename the column

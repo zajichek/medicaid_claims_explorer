@@ -25,6 +25,46 @@ ui <-
 
       h2("Filters", style = "text-align:center"),
 
+      # Claims date range
+      sliderTextInput(
+        inputId = "month_range",
+        label = "Payment Month(s)",
+        choices = format(sort(month_map$ClaimMonthDate), "%b %Y"),
+        selected = format(
+          c(
+            min(month_map$ClaimMonthDate),
+            max(month_map$ClaimMonthDate)
+          ),
+          "%b %Y"
+        )
+      ),
+
+      # HCPCS Codes
+      accordion(
+        open = FALSE,
+        accordion_panel(
+          title = "HCPCS Codes",
+          icon = icon("user-doctor"),
+
+          # Simultaneously filtering on columns
+          select_group_ui(
+            id = "codes",
+            params = list(
+              list(inputId = "Type", label = "Code Type"),
+              list(inputId = "Category", label = "Category"),
+              list(inputId = "Subcategory", label = "Subcategory"),
+              list(inputId = "Family", label = "Family"),
+              list(
+                inputId = "MajorProcedureIndicator",
+                label = "Major Procedure?"
+              ),
+              list(inputId = "CodeDescription", label = "Code")
+            ),
+            inline = FALSE
+          )
+        )
+      ),
+
       # Provider Information (Type I NPI)
       accordion(
         open = FALSE,

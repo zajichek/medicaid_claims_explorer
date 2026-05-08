@@ -5,6 +5,7 @@
 
 # Load packages
 library(shiny)
+library(shinyWidgets)
 library(tidyverse)
 library(bslib)
 library(datamods)
@@ -17,6 +18,14 @@ library(arrow)
 # Datasets
 providers <- read_rds(file = "data/assets/providers.rds")
 organizations <- read_rds(file = "data/assets/organizations.rds")
+hcpcs_lookup <- read_rds(file = "data/assets/hcpcs_lookup.rds")
+month_map <-
+  read_rds(file = "data/assets/month_map.rds") |>
+
+  # Add additional format for app
+  mutate(
+    ClaimMonthYear = format(ClaimMonthDate, "%b %Y")
+  )
 claims <- open_dataset("data/assets/claims") |> collect()
 
 # Map components
@@ -27,10 +36,10 @@ county_outlines <- read_rds(file = "data/assets/county_outlines.rds")
 
 # Base map
 base_map <-
-  leaflet() %>%
+  leaflet() |>
 
   # Add geographic tiles
-  addTiles() %>%
+  addTiles() |>
 
   # Add WI state outline
   addPolygons(
