@@ -60,7 +60,11 @@ ui <-
               ),
               list(inputId = "CodeDescription", label = "Code")
             ),
-            inline = FALSE
+            inline = FALSE,
+            vs_args = list(
+              search = TRUE,
+              disableSelectAll = FALSE
+            )
           )
         )
       ),
@@ -73,10 +77,11 @@ ui <-
           icon = icon("user-doctor"),
 
           # Search as service or billing provider
-          radioButtons(
-            inputId = "provider_search_context",
-            label = "Provider Search Context",
+          checkboxGroupInput(
+            inputId = "individual_provider_roles",
+            label = "Provider Role",
             choices = c("Billing", "Servicing"),
+            selected = c("Billing", "Servicing"),
             inline = TRUE
           ),
 
@@ -93,7 +98,11 @@ ui <-
               list(inputId = "Zip", label = "Zip"),
               list(inputId = "Sex", label = "Sex")
             ),
-            inline = FALSE
+            inline = FALSE,
+            vs_args = list(
+              search = TRUE,
+              disableSelectAll = FALSE
+            )
           )
         )
       ),
@@ -106,10 +115,11 @@ ui <-
           icon = icon("hospital"),
 
           # Search as service or billing provider
-          radioButtons(
-            inputId = "org_search_context",
-            label = "Provider Search Context",
+          checkboxGroupInput(
+            inputId = "organization_provider_roles",
+            label = "Provider Role",
             choices = c("Billing", "Servicing"),
+            selected = c("Billing", "Servicing"),
             inline = TRUE
           ),
 
@@ -124,7 +134,11 @@ ui <-
               list(inputId = "City", label = "City"),
               list(inputId = "Zip", label = "Zip")
             ),
-            inline = FALSE
+            inline = FALSE,
+            vs_args = list(
+              search = TRUE,
+              disableSelectAll = FALSE
+            )
           )
         )
       ),
@@ -150,81 +164,24 @@ ui <-
       )
     ),
 
-    ### Main output
+    value_box(
+      title = "Claim Rows Selected",
+      value = textOutput(outputId = "claim_row_count"),
+      showcase = icon("hospital", class = "fa-3x"),
+      max_height = "200px",
+      full_screen = TRUE
+    ),
 
-    # Big content columns
-    layout_columns(
-      col_widths = c(8, 4),
-
-      # A column that takes up the first fraction of the page
-      layout_column_wrap(
-        width = 1,
-        heights_equal = "row",
-
-        # Map of state
-        card(
-          card_header(
-            div(
-              icon("globe"),
-              "Utilization Map"
-            )
-          ),
-
-          # The map object
-          leafletOutput(outputId = "utilization_map"),
-
-          full_screen = TRUE
-        ),
-
-        # KPI cards + graph across the top
-        layout_column_wrap(
-          width = 1 / 2,
-
-          #
-          highchartOutput(outputId = "scatterplot1"),
-
-          #
-          highchartOutput(outputId = "scatterplot2")
+    card(
+      card_header(
+        div(
+          icon("table"),
+          "Data Preview"
         )
       ),
 
-      # Column containing chat pane
-      layout_column_wrap(
-        width = 1,
-        heights_equal = "row",
-
-        # Total Spending
-        value_box(
-          title = "Total Spending",
-          value = textOutput(outputId = "total_spending"),
-          showcase = icon("dollar-sign", class = "fa-3x"),
-          max_height = "200px",
-          full_screen = TRUE
-        ),
-
-        # Total claims
-        value_box(
-          title = "Total Claims",
-          value = htmlOutput(outputId = "total_claims"),
-          showcase = icon("scale-unbalanced", class = "fa-3x"),
-          theme = "danger",
-          max_height = "200px",
-          full_screen = TRUE
-        ),
-
-        # Make a chat UI to interact with
-        card(
-          card_header(
-            div(
-              icon("table"),
-              "Data View"
-            )
-          ),
-
-          # Table to showing current selection
-          DT::dataTableOutput(outputId = "provider_table"),
-          full_screen = TRUE
-        )
-      )
+      # Table to showing current selection
+      DT::dataTableOutput(outputId = "claims_table"),
+      full_screen = TRUE
     )
   )
