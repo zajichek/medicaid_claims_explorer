@@ -27,22 +27,6 @@ server <-
           )
       })
 
-    ## Extract the selected codes
-    current_codes <-
-      # Filters the dataset at once
-      select_group_server(
-        id = "codes",
-        data = reactive(hcpcs_lookup),
-        vars = reactive(c(
-          "Type",
-          "Category",
-          "Subcategory",
-          "Family",
-          "MajorProcedureIndicator",
-          "CodeDescription"
-        ))
-      )
-
     ## Extract the selected (type I) providers
     current_providers <-
       # Filters the dataset at once
@@ -86,21 +70,21 @@ server <-
     })
 
     ## Establish provider search context based on input
-    # Have selections been made?
+    # Have selections been made in the filters?
     individual_provider_rows_narrowed <- reactive({
       length(selected_individual_npis()) < nrow(providers)
     })
     organization_provider_rows_narrowed <- reactive({
       length(selected_organization_npis()) < nrow(organizations)
     })
-    # Are the roles activated?
+    # Are the roles activated in the checkboxes?
     individual_provider_roles_selected <- reactive({
       length(input$individual_provider_roles) > 0
     })
     organization_provider_roles_selected <- reactive({
       length(input$organization_provider_roles) > 0
     })
-    # Are the filters active?
+    # Are the filters active (rows filtered + context activated)?
     individual_provider_filter_active <- reactive({
       individual_provider_rows_narrowed() &&
         individual_provider_roles_selected()
@@ -109,6 +93,7 @@ server <-
       organization_provider_rows_narrowed() &&
         organization_provider_roles_selected()
     })
+    # Are any filters active (individual or organization)?
     provider_filters_active <- reactive({
       individual_provider_filter_active() ||
         organization_provider_filter_active()
@@ -118,9 +103,11 @@ server <-
     # Individual (Type I)
     individual_billing_npis <- reactive({
       if (
+        # Type I providers are selected AND "Billing" is marked
         individual_provider_filter_active() &&
           "Billing" %in% input$individual_provider_roles
       ) {
+        # Return the currently selected Type I providers
         selected_individual_npis()
       } else {
         character(0)
@@ -128,9 +115,11 @@ server <-
     })
     individual_servicing_npis <- reactive({
       if (
+        # Type I providers are selected AND "Servicing" is marked
         individual_provider_filter_active() &&
           "Servicing" %in% input$individual_provider_roles
       ) {
+        # Return the currently selected Type I providers
         selected_individual_npis()
       } else {
         character(0)
@@ -139,9 +128,11 @@ server <-
     # Organizations (Type II)
     organization_billing_npis <- reactive({
       if (
+        # Type II providers are selected AND "Billing" is marked
         organization_provider_filter_active() &&
           "Billing" %in% input$organization_provider_roles
       ) {
+        # Return the currently selected Type II providers
         selected_organization_npis()
       } else {
         character(0)
@@ -149,9 +140,11 @@ server <-
     })
     organization_servicing_npis <- reactive({
       if (
+        # Type II providers are selected AND "Servicing" is marked
         organization_provider_filter_active() &&
           "Servicing" %in% input$organization_provider_roles
       ) {
+        # Return the currently selected Type II providers
         selected_organization_npis()
       } else {
         character(0)
@@ -167,21 +160,21 @@ server <-
       c(individual_servicing_npis(), organization_servicing_npis())
     })
 
-    # Selected claims records
-    current_claims <-
+    ## Extract set of claims to select from for current provider selection
+
+    # Find base set of claim records
+    claims_for_hcpcs_choices <-
       reactive({
-        # Filter on date + code filters
+        # Filter on datefilters
         temp_claims <-
           claims |>
-          filter(
-            ClaimMonth %in% current_date_range()$ClaimMonth,
-            HCPCSCode %in% current_codes()$Code
-          )
+          filter(ClaimMonth %in% current_date_range()$ClaimMonth)
 
         ## Check for + apply provider filters
         if (!provider_filters_active()) {
           temp_claims
         } else if (
+          # Search only on Type I providers
           individual_provider_filter_active() &&
             !organization_provider_filter_active()
         ) {
@@ -192,6 +185,7 @@ server <-
                 ServicingProvider %in% individual_servicing_npis()
             )
         } else if (
+          # Search only on Type II providers
           organization_provider_filter_active() &&
             !individual_provider_filter_active()
         ) {
@@ -202,9 +196,11 @@ server <-
                 ServicingProvider %in% organization_servicing_npis()
             )
         } else {
+          # Check for active filter on each context
           billing_constraints_active <- length(selected_billing_npis()) > 0
           servicing_constraints_active <- length(selected_servicing_npis()) > 0
 
+          # Only keep rows with matching billing AND servicing provider (intersection) if both active
           temp_claims |>
             filter(
               (!billing_constraints_active |
@@ -213,6 +209,42 @@ server <-
                 ServicingProvider %in% selected_servicing_npis())
             )
         }
+      })
+
+    # Extract unique codes
+    available_hcpcs_codes <- reactive({
+      unique(claims_for_hcpcs_choices()$HCPCSCode)
+    })
+
+    # Return final lookup table
+    available_hcpcs_lookup <- reactive({
+      hcpcs_lookup |>
+        filter(Code %in% available_hcpcs_codes())
+    })
+
+    ## Extract the selected codes
+    current_codes <-
+      # Filters the dataset at once
+      select_group_server(
+        id = "codes",
+        data = available_hcpcs_lookup,
+        vars = reactive(c(
+          "Type",
+          "Category",
+          "Subcategory",
+          "Family",
+          "MajorProcedureIndicator",
+          "CodeDescription"
+        ))
+      )
+
+    # Selected claims records
+    current_claims <-
+      reactive({
+        claims_for_hcpcs_choices() |>
+          filter(
+            HCPCSCode %in% current_codes()$Code
+          )
       })
 
     # Display claim count

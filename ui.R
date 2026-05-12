@@ -39,6 +39,91 @@ ui <-
         )
       ),
 
+      # Accordion to select providers
+      accordion(
+        open = FALSE,
+        accordion_panel(
+          title = "Providers",
+          icon = icon("user-doctor"),
+
+          # Provider Information (Type I NPI)
+          accordion(
+            open = FALSE,
+            accordion_panel(
+              title = "Individuals (Type 1)",
+              icon = icon("person"),
+
+              # Search as service or billing provider
+              checkboxGroupInput(
+                inputId = "individual_provider_roles",
+                label = "Provider Role",
+                choices = c("Billing", "Servicing"),
+                selected = c("Billing", "Servicing"),
+                inline = TRUE
+              ),
+
+              # Simultaneously filtering on columns
+              select_group_ui(
+                id = "providers",
+                params = list(
+                  list(inputId = "NPI", label = "NPI #"),
+                  list(inputId = "LastName", label = "Last Name"),
+                  list(inputId = "FirstName", label = "First Name"),
+                  list(inputId = "Credentials", label = "Credentials"),
+                  list(inputId = "TaxonomyCode", label = "Taxonomy"),
+                  list(inputId = "City", label = "City"),
+                  list(inputId = "Zip", label = "Zip"),
+                  list(inputId = "Sex", label = "Sex")
+                ),
+                inline = FALSE,
+                vs_args = list(
+                  search = TRUE,
+                  disableSelectAll = FALSE
+                )
+              )
+            )
+          ),
+
+          br(),
+
+          # Provider Information (Type II NPI)
+          accordion(
+            open = FALSE,
+            accordion_panel(
+              title = "Organizations (Type 2)",
+              icon = icon("hospital"),
+
+              # Search as service or billing provider
+              checkboxGroupInput(
+                inputId = "organization_provider_roles",
+                label = "Provider Role",
+                choices = c("Billing", "Servicing"),
+                selected = c("Billing", "Servicing"),
+                inline = TRUE
+              ),
+
+              # Simultaneously filtering on columns
+              select_group_ui(
+                id = "organizations",
+                params = list(
+                  list(inputId = "NPI", label = "NPI #"),
+                  list(inputId = "Name", label = "Name"),
+                  list(inputId = "TaxonomyCode", label = "Taxonomy"),
+                  list(inputId = "Subpart", label = "Subpart of org?"),
+                  list(inputId = "City", label = "City"),
+                  list(inputId = "Zip", label = "Zip")
+                ),
+                inline = FALSE,
+                vs_args = list(
+                  search = TRUE,
+                  disableSelectAll = FALSE
+                )
+              )
+            )
+          )
+        )
+      ),
+
       # HCPCS Codes
       accordion(
         open = FALSE,
@@ -59,80 +144,6 @@ ui <-
                 label = "Major Procedure?"
               ),
               list(inputId = "CodeDescription", label = "Code")
-            ),
-            inline = FALSE,
-            vs_args = list(
-              search = TRUE,
-              disableSelectAll = FALSE
-            )
-          )
-        )
-      ),
-
-      # Provider Information (Type I NPI)
-      accordion(
-        open = FALSE,
-        accordion_panel(
-          title = "Individual Providers",
-          icon = icon("user-doctor"),
-
-          # Search as service or billing provider
-          checkboxGroupInput(
-            inputId = "individual_provider_roles",
-            label = "Provider Role",
-            choices = c("Billing", "Servicing"),
-            selected = c("Billing", "Servicing"),
-            inline = TRUE
-          ),
-
-          # Simultaneously filtering on columns
-          select_group_ui(
-            id = "providers",
-            params = list(
-              list(inputId = "NPI", label = "NPI #"),
-              list(inputId = "LastName", label = "Last Name"),
-              list(inputId = "FirstName", label = "First Name"),
-              list(inputId = "Credentials", label = "Credentials"),
-              list(inputId = "TaxonomyCode", label = "Taxonomy"),
-              list(inputId = "City", label = "City"),
-              list(inputId = "Zip", label = "Zip"),
-              list(inputId = "Sex", label = "Sex")
-            ),
-            inline = FALSE,
-            vs_args = list(
-              search = TRUE,
-              disableSelectAll = FALSE
-            )
-          )
-        )
-      ),
-
-      # Provider Information (Type II NPI)
-      accordion(
-        open = FALSE,
-        accordion_panel(
-          title = "Organizations",
-          icon = icon("hospital"),
-
-          # Search as service or billing provider
-          checkboxGroupInput(
-            inputId = "organization_provider_roles",
-            label = "Provider Role",
-            choices = c("Billing", "Servicing"),
-            selected = c("Billing", "Servicing"),
-            inline = TRUE
-          ),
-
-          # Simultaneously filtering on columns
-          select_group_ui(
-            id = "organizations",
-            params = list(
-              list(inputId = "NPI", label = "NPI #"),
-              list(inputId = "Name", label = "Name"),
-              list(inputId = "TaxonomyCode", label = "Taxonomy"),
-              list(inputId = "Subpart", label = "Subpart of org?"),
-              list(inputId = "City", label = "City"),
-              list(inputId = "Zip", label = "Zip")
             ),
             inline = FALSE,
             vs_args = list(

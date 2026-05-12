@@ -543,3 +543,174 @@ available_hcpcs_data <- reactive({
 # - Watch the R console for reactive cycle errors or repeated invalidation loops.
 # - Confirm current_claims returns the same results as Round 2 when no dynamic
 #   choice narrowing is enabled.
+
+
+# ---- Round 4: one-way provider-to-HCPCS dynamic narrowing ----
+
+# This round is intentionally one-way:
+# - individual provider / organization filters -> HCPCS choices
+# - HCPCS choices do not update individual provider / organization choices
+#
+# This avoids the circular dependency risk from Round 3 while supporting the
+# intended workflow: choose providers first, then choose from the codes available
+# for those providers.
+
+
+# Current objects identified:
+# - HCPCS lookup object: hcpcs_lookup
+# - HCPCS datamods result object: current_codes
+# - Individual provider datamods result object: current_providers
+# - Organization datamods result object: current_organizations
+# - Claims object: claims
+# - Claims code column: HCPCSCode
+# - Claims provider columns: BillingProvider, ServicingProvider
+# - HCPCS select_group_server currently receives: data = reactive(hcpcs_lookup)
+
+
+# Suggested insertion point:
+# Copy these helper reactives into server.R after the Round 2 provider role
+# helpers are defined:
+# - individual_provider_filter_active
+# - organization_provider_filter_active
+# - provider_filters_active
+# - individual_billing_npis
+# - individual_servicing_npis
+# - organization_billing_npis
+# - organization_servicing_npis
+# - selected_billing_npis
+# - selected_servicing_npis
+#
+# The helpers below must not call current_codes(). current_codes should consume
+# available_hcpcs_lookup, not the other way around.
+
+claims_for_hcpcs_choices <- reactive({
+  # If no provider or organization filters are active, available_hcpcs_lookup()
+  # returns the full hcpcs_lookup table. This reactive is only used when provider
+  # filters are active.
+  temp_claims <-
+    claims |>
+    filter(ClaimMonth %in% current_date_range()$ClaimMonth)
+
+  if (
+    individual_provider_filter_active() &&
+      !organization_provider_filter_active()
+  ) {
+    temp_claims |>
+      filter(
+        BillingProvider %in% individual_billing_npis() |
+          ServicingProvider %in% individual_servicing_npis()
+      )
+  } else if (
+    organization_provider_filter_active() &&
+      !individual_provider_filter_active()
+  ) {
+    temp_claims |>
+      filter(
+        BillingProvider %in% organization_billing_npis() |
+          ServicingProvider %in% organization_servicing_npis()
+      )
+  } else {
+    billing_constraints_active <- length(selected_billing_npis()) > 0
+    servicing_constraints_active <- length(selected_servicing_npis()) > 0
+
+    temp_claims |>
+      filter(
+        (!billing_constraints_active |
+          BillingProvider %in% selected_billing_npis()),
+        (!servicing_constraints_active |
+          ServicingProvider %in% selected_servicing_npis())
+      )
+  }
+})
+
+available_hcpcs_codes <- reactive({
+  unique(claims_for_hcpcs_choices()$HCPCSCode)
+})
+
+available_hcpcs_lookup <- reactive({
+  if (!provider_filters_active()) {
+    hcpcs_lookup
+  } else {
+    hcpcs_lookup |>
+      filter(Code %in% available_hcpcs_codes())
+  }
+})
+
+
+# Date/month note:
+# The helper above includes current_date_range() when provider filters are active,
+# so HCPCS choices reflect both the selected providers and selected months. If you
+# want HCPCS availability to ignore month selection, remove this line from
+# claims_for_hcpcs_choices():
+#
+#   filter(ClaimMonth %in% current_date_range()$ClaimMonth)
+#
+# The no-provider-filter case intentionally returns the full hcpcs_lookup table,
+# matching the requirement that all HCPCS choices appear when no provider filters
+# are active.
+
+
+# Minimal replacement for the existing HCPCS datamods::select_group_server call:
+# Replace only the data argument in the current_codes block.
+#
+# Existing:
+#   data = reactive(hcpcs_lookup),
+#
+# Replace with:
+#   data = available_hcpcs_lookup,
+#
+# Keep the existing id and vars unchanged:
+current_codes <-
+  select_group_server(
+    id = "codes",
+    data = available_hcpcs_lookup,
+    vars = reactive(c(
+      "Type",
+      "Category",
+      "Subcategory",
+      "Family",
+      "MajorProcedureIndicator",
+      "CodeDescription"
+    ))
+  )
+
+
+# Placement note for the current_codes block:
+# In the current server.R, current_codes is defined before current_providers and
+# the Round 2 provider role helpers. Because available_hcpcs_lookup depends on
+# those provider helpers, the safest copy-paste change is:
+# - keep current_date_range near the top
+# - define current_providers and current_organizations
+# - define the Round 2 provider role helpers
+# - define claims_for_hcpcs_choices, available_hcpcs_codes, available_hcpcs_lookup
+# - then define current_codes using data = available_hcpcs_lookup
+# - keep current_claims after current_codes
+#
+# This changes server object order only; it does not require UI/layout changes.
+
+
+# Circular dependency guard:
+# Do not use current_codes() inside claims_for_hcpcs_choices,
+# available_hcpcs_codes, or available_hcpcs_lookup. current_claims can continue
+# to use current_codes() after the user selects HCPCS values.
+#
+# Also do not change provider or organization select_group_server calls to depend
+# on current_codes(). They should remain:
+#   data = reactive(providers)
+#   data = reactive(organizations)
+
+
+# Round 4 manual validation checklist
+# - With no provider filters active, all HCPCS choices appear.
+# - With individual providers filtered as Billing only, HCPCS choices narrow to
+#   codes where BillingProvider is in individual_billing_npis().
+# - With individual providers filtered as Servicing only, HCPCS choices narrow to
+#   codes where ServicingProvider is in individual_servicing_npis().
+# - With individual providers filtered as Billing and Servicing, HCPCS choices
+#   include codes where either provider role matches.
+# - With organization Billing and individual Servicing active, HCPCS choices
+#   narrow to codes matching BillingProvider in organization_billing_npis() AND
+#   ServicingProvider in individual_servicing_npis().
+# - Selecting HCPCS codes does not change provider or organization filter choices.
+# - current_claims still applies HCPCS filtering after HCPCS selections are made.
+# - Clearing provider and organization filters restores the full HCPCS lookup.
