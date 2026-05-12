@@ -12,6 +12,7 @@ library(datamods)
 library(highcharter)
 library(leaflet)
 library(arrow)
+library(sf)
 
 ### Import app assets
 
