@@ -175,24 +175,97 @@ ui <-
       )
     ),
 
-    value_box(
-      title = "Claim Rows Selected",
-      value = textOutput(outputId = "claim_row_count"),
-      showcase = icon("hospital", class = "fa-3x"),
-      max_height = "200px",
-      full_screen = TRUE
-    ),
+    ## Main output pages
+    navset_tab(
+      # Home page (overview)
+      nav_panel(
+        title = "Home",
 
-    card(
-      card_header(
-        div(
-          icon("table"),
-          "Data Preview"
+        # KPI metrics
+        layout_column_wrap(
+          width = 1 / 3,
+
+          # Total paid
+          value_box(
+            title = "Total Spend",
+            value = htmlOutput(outputId = "total_spend"),
+            showcase = icon("dollar", class = "fa-3x"),
+            theme = "teal",
+            max_height = "200px",
+            full_screen = TRUE
+          ),
+
+          # Provder count (billing)
+          value_box(
+            title = "Providers Paid",
+            value = htmlOutput(outputId = "billing_provider_count"),
+            showcase = icon("user-doctor", class = "fa-3x"),
+            theme = "warning",
+            max_height = "200px",
+            full_screen = TRUE
+          ),
+
+          # Total claim lines
+          value_box(
+            title = "Claim Lines",
+            value = htmlOutput(outputId = "claim_lines"),
+            showcase = icon("list", class = "fa-3x"),
+            theme = "primary",
+            max_height = "200px",
+            full_screen = TRUE
+          )
+        ),
+
+        # Graphs + map
+        layout_column_wrap(
+          width = 1 / 2,
+
+          # Plots
+          layout_column_wrap(
+            width = 1,
+
+            # Spend over time
+            card(
+              card_header(
+                div(
+                  icon("clock"),
+                  "Monthly Spend"
+                )
+              ),
+              highchartOutput(outputId = "spend_over_time"),
+              full_screen = TRUE
+            )
+          ),
+
+          # WI map
+          card(
+            card_header(
+              div(
+                icon("globe"),
+                "Spend By Billing Provider Zip Code"
+              )
+            ),
+            leafletOutput(outputId = "county_map"),
+            full_screen = TRUE
+          )
         )
       ),
 
-      # Table to showing current selection
-      DT::dataTableOutput(outputId = "claims_table"),
-      full_screen = TRUE
+      # Line-item data + download
+      nav_panel(
+        "Data View",
+        card(
+          card_header(
+            div(
+              icon("table"),
+              "Data Preview"
+            )
+          ),
+
+          # Table to showing current selection
+          DT::dataTableOutput(outputId = "claims_table"),
+          full_screen = TRUE
+        )
+      )
     )
   )

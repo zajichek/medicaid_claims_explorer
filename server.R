@@ -247,13 +247,179 @@ server <-
           )
       })
 
-    # Display claim count
-    output$claim_row_count <-
-      renderText({
-        # Count the number of claim rows retrieved
-        nrow(current_claims())
+    ### Home page
+
+    ## Display KPI's
+    # Total spend
+    output$total_spend <-
+      renderUI({
+        div(
+          scales::dollar(sum(current_claims()$PaidAmount)),
+          br(),
+          span(
+            paste0(
+              scales::dollar(
+                sum(current_claims()$PaidAmount) /
+                  sum(current_claims()$ClaimLines)
+              ),
+              " per claim line"
+            ),
+            style = "font-size: 12px"
+          )
+        )
+      })
+    # Providers paid
+    output$billing_provider_count <-
+      renderUI({
+        div(
+          n_distinct(current_claims()$BillingProvider),
+          br(),
+          span(
+            paste0(
+              n_distinct(current_claims()$ServicingProvider),
+              " servicing providers"
+            ),
+            style = "font-size: 12px"
+          )
+        )
+      })
+    # Claim lines
+    output$claim_lines <-
+      renderUI({
+        div(
+          format(sum(current_claims()$ClaimLines), big.mark = ","),
+          br(),
+          span(
+            paste0(n_distinct(current_codes()$Code), " distinct codes"),
+            style = "font-size: 12px"
+          )
+        )
       })
 
+    ## Plots
+    # Spend over time
+    output$spend_over_time <-
+      renderHighchart({
+        current_claims() |>
+
+          # Compute total by month
+          summarize(
+            TotalSpend = sum(PaidAmount),
+            .by = ClaimMonth
+          ) |>
+
+          # Join to get the date object
+          inner_join(
+            y = current_date_range(),
+            by = "ClaimMonth"
+          ) |>
+          arrange(ClaimMonthDate) |>
+
+          # Make the plot
+          hchart(
+            "line",
+            hcaes(
+              x = ClaimMonthDate,
+              y = TotalSpend
+            ),
+            marker = list(enabled = TRUE)
+          ) |>
+          hc_xAxis(
+            title = list(text = "Month")
+          ) |>
+          hc_yAxis(
+            title = list(text = "Total Paid ($)")
+          ) |>
+          hc_tooltip(
+            pointFormat = "Paid: <b>${point.y:,.0f}</b>"
+          )
+      })
+
+    ## Map
+    # Compute total spend by zip code
+    total_spend_by_zip <-
+      reactive({
+        current_claims() |>
+
+          # Join to get provider zip code
+          inner_join(
+            y = bind_rows(
+              providers |> select(NPI, Zip, lon, lat),
+              organizations |> select(NPI, Zip, lon, lat)
+            ),
+            by = c("BillingProvider" = "NPI")
+          ) |>
+
+          # Compute total by zip
+          summarize(
+            BillingProviders = n_distinct(BillingProvider),
+            ServicingProviders = n_distinct(ServicingProvider),
+            Codes = n_distinct(HCPCSCode),
+            ClaimLines = sum(ClaimLines),
+            TotalSpend = sum(PaidAmount),
+            .by = c(
+              Zip,
+              lon,
+              lat
+            )
+          )
+      })
+
+    # Show map contents
+    output$county_map <- renderLeaflet({
+      base_map
+    })
+    # Update with data
+    observe({
+      # Extract the current dataset
+      temp_total_spend_by_zip <- total_spend_by_zip()
+
+      # Make the palette
+      pal <-
+        colorNumeric(
+          palette = "RdYlGn",
+          domain = -1 * sort(unique(temp_total_spend_by_zip$TotalSpend))
+        )
+
+      leafletProxy("county_map") |>
+        clearMarkers() |>
+
+        # Zoom based on selection
+        setView(
+          lng = mean(unique(temp_total_spend_by_zip$lon)),
+          lat = mean(unique(temp_total_spend_by_zip$lat)),
+          zoom = 7
+        ) |>
+
+        # Add points to map
+        addCircleMarkers(
+          data = temp_total_spend_by_zip,
+          lng = ~lon,
+          lat = ~lat,
+          label = ~ paste0(Zip, " (click for info)"),
+          popup = ~ paste0(
+            "Zip Code: ",
+            Zip,
+            "<br>Total Spend: ",
+            scales::dollar(TotalSpend),
+            "<br>Claim Lines: ",
+            format(ClaimLines, big.mark = ","),
+            "<br>Spend Per Claim Line: ",
+            scales::dollar(TotalSpend / ClaimLines),
+            "<br>Billing Providers: ",
+            BillingProviders,
+            "<br>Servicing Providers: ",
+            ServicingProviders,
+            "<br>Distinct HCPCS Codes: ",
+            Codes
+          ),
+          color = ~ pal(-1 * TotalSpend),
+          radius = ~ scale(TotalSpend)[, 1] + 5,
+          fillOpacity = 1
+        )
+    })
+
+    ### Data View
     # Show data
     output$claims_table <- DT::renderDataTable({
       current_claims() |> sample_n(min(1000, nrow(current_claims())))
