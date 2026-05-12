@@ -7,3 +7,18 @@ This dataset provides _monthly_ spending for outpatient and professional service
 ## Setup
 
 The dataset was downloaded from the [webpage](https://opendata.hhs.gov/datasets/medicaid-provider-spending/) as a [DuckDB](https://duckdb.org/) database. As of the most recent download on 4/21/2026, the file is ~3.5 GB, thus was not pushed to the GitHub repo. To enable code in this repository to run, you should download the database and place it in your local project directory. It was also downloaded as a [Parquet](https://parquet.apache.org/) file as an alternative means of access.
+
+Create `manifest.json` with:
+
+```
+rsconnect::writeManifest(
+  appDir = ".",
+  appFiles = c(
+    "global.R",
+    "ui.R",
+    "server.R",
+    "data/assets"
+  ),
+  appMode = "shiny"
+)
+```
