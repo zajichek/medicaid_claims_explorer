@@ -53,10 +53,10 @@ base_map <-
   addPolygons(
     data = county_outlines,
     color = "black",
-    fillColor = "white",
+    fillColor = "black",
     weight = 1,
     opacity = .5,
-    fillOpacity = .35,
+    fillOpacity = .25,
     highlightOptions = highlightOptions(
       color = "black",
       weight = 3,

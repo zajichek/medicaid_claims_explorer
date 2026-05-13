@@ -247,9 +247,9 @@ server <-
           )
       })
 
-    ### Home page
+    ###### Home page
 
-    ## Display KPI's
+    ### Display KPI's
     # Total spend
     output$total_spend <-
       renderUI({
@@ -296,7 +296,7 @@ server <-
         )
       })
 
-    ## Plots
+    ### Plots
     # Spend over time
     output$spend_over_time <-
       renderHighchart({
@@ -335,89 +335,216 @@ server <-
           )
       })
 
-    ## Map
-    # Compute total spend by zip code
-    total_spend_by_zip <-
-      reactive({
-        current_claims() |>
-
-          # Join to get provider zip code
-          inner_join(
-            y = bind_rows(
-              providers |> select(NPI, Zip, lon, lat),
-              organizations |> select(NPI, Zip, lon, lat)
+    ### Map
+    # Provider data for map
+    map_provider_data <- reactive({
+      provider_lookup <-
+        bind_rows(
+          providers |>
+            transmute(
+              NPI,
+              ProviderName = paste(FirstName, LastName),
+              ProviderType = "Individual",
+              Zip,
+              lon,
+              lat
             ),
-            by = c("BillingProvider" = "NPI")
-          ) |>
-
-          # Compute total by zip
-          summarize(
-            BillingProviders = n_distinct(BillingProvider),
-            ServicingProviders = n_distinct(ServicingProvider),
-            Codes = n_distinct(HCPCSCode),
-            ClaimLines = sum(ClaimLines),
-            TotalSpend = sum(PaidAmount),
-            .by = c(
+          organizations |>
+            transmute(
+              NPI,
+              ProviderName = Name,
+              ProviderType = "Organization",
               Zip,
               lon,
               lat
             )
-          )
-      })
+        )
 
+      current_claims() |>
+        inner_join(
+          y = provider_lookup,
+          by = c("BillingProvider" = "NPI")
+        ) |>
+        filter(!is.na(lon), !is.na(lat)) |>
+        summarize(
+          ProviderName = first(ProviderName),
+          ProviderType = first(ProviderType),
+          Zip = first(Zip),
+          lon = jitter(first(lon), factor = .005),
+          lat = jitter(first(lat), factor = .005),
+          ServicingProviders = n_distinct(ServicingProvider),
+          Codes = n_distinct(HCPCSCode),
+          ClaimLines = sum(ClaimLines),
+          TotalSpend = sum(PaidAmount),
+          # Patients = sum(Patients), # Optional future field if available.
+          .by = BillingProvider
+        ) |>
+        rename(NPI = BillingProvider)
+    })
+    # Extract map zoom level
+    current_map_zoom <- reactive({
+      if (is.null(input$county_map_zoom)) {
+        7
+      } else {
+        input$county_map_zoom
+      }
+    })
+    # Generic metric (in case we change it)
+    current_map_metric <- reactive({
+      "TotalSpend"
+      # Future examples:
+      # input$map_metric
+      # "ClaimLines"
+      # "BillingProviders"
+    })
+    # Palette for heatmap
+    metric_palette <- function(data, metric) {
+      colorNumeric(
+        palette = "YlOrRd",
+        domain = data[[metric]],
+        na.color = "#cccccc"
+      )
+    }
+    metric_radius <- function(values, min_radius = 4, max_radius = 18) {
+      if (length(values) == 0 || all(is.na(values))) {
+        return(numeric(0))
+      }
+
+      value_range <- range(values, na.rm = TRUE)
+
+      if (diff(value_range) == 0) {
+        return(rep((min_radius + max_radius) / 2, length(values)))
+      }
+
+      min_radius +
+        (values - value_range[1]) /
+          diff(value_range) *
+          (max_radius - min_radius)
+    }
+
+    ## Map build
     # Show map contents
     output$county_map <- renderLeaflet({
       base_map
     })
     # Update with data
-    observe({
-      # Extract the current dataset
-      temp_total_spend_by_zip <- total_spend_by_zip()
+    observeEvent(
+      list(
+        map_provider_data(),
+        current_map_metric()
+      ),
+      {
+        metric <- current_map_metric()
+        temp_provider_data <- map_provider_data()
+        pal <- metric_palette(temp_provider_data, metric)
 
-      # Make the palette
-      pal <-
-        colorNumeric(
-          palette = "RdYlGn",
-          domain = -1 * sort(unique(temp_total_spend_by_zip$TotalSpend))
-        )
+        temp_provider_data <-
+          temp_provider_data |>
+          mutate(
+            MapMetricValue = .data[[metric]],
+            MapColor = pal(MapMetricValue),
+            MapRadius = metric_radius(
+              MapMetricValue,
+              min_radius = 3,
+              max_radius = 10
+            ),
+            ClusterMetric = MapMetricValue,
+            ClusterClaimLines = ClaimLines
+            # ClusterPatients = Patients # Optional future field if available.
+          )
 
-      leafletProxy("county_map") |>
-        clearMarkers() |>
+        leafletProxy("county_map") |>
+          clearGroup("provider_markers") |>
+          addCircleMarkers(
+            data = temp_provider_data,
+            lng = ~lon,
+            lat = ~lat,
+            group = "provider_markers",
+            label = ~ paste0(
+              ProviderName,
+              " | ",
+              scales::dollar(TotalSpend)
+            ),
+            popup = ~ paste0(
+              "Provider: ",
+              ProviderName,
+              "<br>NPI: ",
+              NPI,
+              "<br>Type: ",
+              ProviderType,
+              "<br>ZIP Code: ",
+              Zip,
+              "<br>Total Spend: ",
+              scales::dollar(TotalSpend),
+              "<br>Claim Lines: ",
+              format(ClaimLines, big.mark = ","),
+              "<br>Spend Per Claim Line: ",
+              scales::dollar(TotalSpend / ClaimLines),
+              "<br>Servicing Providers: ",
+              ServicingProviders,
+              "<br>Distinct HCPCS Codes: ",
+              Codes
+            ),
+            options = markerOptions(
+              metric = ~ClusterMetric,
+              claimLines = ~ClusterClaimLines
+              # patients = ~ClusterPatients # Optional future field if available.
+            ),
+            color = ~MapColor,
+            fillColor = ~MapColor,
+            radius = ~MapRadius,
+            fillOpacity = 0.85,
+            opacity = 0.85,
+            weight = 1,
+            clusterOptions = markerClusterOptions(
+              showCoverageOnHover = FALSE,
+              spiderfyOnMaxZoom = TRUE,
+              zoomToBoundsOnClick = TRUE,
+              disableClusteringAtZoom = 14,
+              maxClusterRadius = 75,
+              iconCreateFunction = htmlwidgets::JS(
+                "function(cluster) {
+                    var markers = cluster.getAllChildMarkers();
+                    var metricTotal = 0;
+                    var claimLinesTotal = 0;
 
-        # Zoom based on selection
-        setView(
-          lng = mean(unique(temp_total_spend_by_zip$lon)),
-          lat = mean(unique(temp_total_spend_by_zip$lat)),
-          zoom = 7
-        ) |>
+                    markers.forEach(function(marker) {
+                      metricTotal += Number(marker.options.metric || 0);
+                      claimLinesTotal += Number(marker.options.claimLines || 0);
+                    });
 
-        # Add points to map
-        addCircleMarkers(
-          data = temp_total_spend_by_zip,
-          lng = ~lon,
-          lat = ~lat,
-          label = ~ paste0(Zip, " (click for info)"),
-          popup = ~ paste0(
-            "Zip Code: ",
-            Zip,
-            "<br>Total Spend: ",
-            scales::dollar(TotalSpend),
-            "<br>Claim Lines: ",
-            format(ClaimLines, big.mark = ","),
-            "<br>Spend Per Claim Line: ",
-            scales::dollar(TotalSpend / ClaimLines),
-            "<br>Billing Providers: ",
-            BillingProviders,
-            "<br>Servicing Providers: ",
-            ServicingProviders,
-            "<br>Distinct HCPCS Codes: ",
-            Codes
-          ),
-          color = ~ pal(-1 * TotalSpend),
-          radius = ~ scale(TotalSpend)[, 1] + 5,
-          fillOpacity = 1
-        )
-    })
+                    var abbreviatedMetric =
+                      metricTotal >= 1000000000
+                        ? '$' + (metricTotal / 1000000000).toFixed(1) + 'B'
+                        : metricTotal >= 1000000
+                          ? '$' + (metricTotal / 1000000).toFixed(1) + 'M'
+                          : '$' + Math.round(metricTotal / 1000) + 'K';
+
+                    var html =
+                      '<div style=\"' +
+                        'width:64px;height:44px;' +
+                        'display:flex;flex-direction:column;' +
+                        'align-items:center;justify-content:center;' +
+                        'line-height:1.05;text-align:center;' +
+                        'white-space:nowrap;overflow:visible;' +
+                      '\">' +
+                        '<strong style=\"font-size:13px;\">' + markers.length + '</strong>' +
+                        '<span style=\"font-size:10px;\">' + abbreviatedMetric + '</span>' +
+                      '</div>';
+
+                    return new L.DivIcon({
+                      html: html,
+                      className: 'marker-cluster marker-cluster-large',
+                      iconSize: new L.Point(64, 44),
+                      iconAnchor: new L.Point(32, 22)
+                    });
+                  }"
+              )
+            )
+          )
+      },
+      ignoreInit = FALSE
+    )
 
     ### Data View
     # Show data
