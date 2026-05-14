@@ -6,17 +6,43 @@
 ui <-
   page_sidebar(
     theme = bs_theme(bootswatch = "spacelab"),
-    title = tags$h2(
-      class = "bslib-page-title",
-      style = "color:white;",
-      "Medicaid Spending",
-      tags$span(
-        class = "h6",
-        style = "color:white",
-        "Wisconsin 2018-2024"
+
+    title = div(
+      class = "d-flex flex-column",
+
+      div(
+        class = "d-flex align-items-center gap-2",
+
+        bs_icon(
+          "activity",
+          class = "text-info",
+          style = "font-size: 1.8rem;"
+        ),
+
+        tags$span(
+          style = "
+        color: white;
+        font-size: 1.9rem;
+        font-weight: 700;
+        letter-spacing: 0.3px;
+      ",
+          "Wisconsin Medicaid Provider Explorer"
+        )
+      ),
+
+      tags$div(
+        style = "
+      color: rgba(255,255,255,0.82);
+      font-size: 0.95rem;
+      margin-top: 0.15rem;
+      margin-left: 2.2rem;
+      line-height: 1.2;
+    ",
+        "Outpatient & Professional Claims • 2018–2024"
       )
     ),
-    window_title = "Medicaid Spending Wisconsin",
+
+    window_title = "Wisconsin Medicaid Provider Explorer",
 
     # Sidebar holds configuration
     sidebar = sidebar(
@@ -152,26 +178,6 @@ ui <-
             )
           )
         )
-      ),
-
-      # Dataset sources
-      HTML("<br><br>"),
-      h3("Data Sources"),
-      tags$a(
-        "Medicaid Spending Data",
-        href = "https://opendata.hhs.gov/datasets/medicaid-provider-spending/"
-      ),
-      tags$a(
-        "NPI Data",
-        href = "https://download.cms.gov/nppes/NPI_Files.html"
-      ),
-      tags$a(
-        "HCPCS Code Descriptions",
-        href = "https://www.cms.gov/medicare/payment/fee-schedules/physician/pfs-relative-value-files/rvu24a"
-      ),
-      tags$a(
-        "HCPCS BETOS Categories",
-        href = "https://data.cms.gov/provider-summary-by-type-of-service/provider-service-classifications/restructured-betos-classification-system/data"
       )
     ),
 
@@ -232,7 +238,12 @@ ui <-
                   "Monthly Spend"
                 )
               ),
-              highchartOutput(outputId = "spend_over_time"),
+              highchartOutput(outputId = "spend_over_time") |>
+                withSpinner(
+                  type = 4,
+                  color = "#2C3E50",
+                  size = 1
+                ),
               full_screen = TRUE
             )
           ),
@@ -242,18 +253,71 @@ ui <-
             card_header(
               div(
                 icon("globe"),
-                "Spend By Billing Provider Zip Code"
+                "Spend By Billing Provider Location"
               )
             ),
-            leafletOutput(outputId = "county_map"),
+
+            div(
+              class = "small text-muted",
+              style = "
+      padding: 0.5rem 1rem 0rem 1rem;
+      line-height: 1.3;
+    ",
+              icon("circle-info"),
+              HTML(
+                "<strong>Map Tip:</strong> Click clusters to progressively zoom and explore provider spending by location. Marker size and color reflect the total spend amount."
+              )
+            ),
+
+            leafletOutput(outputId = "county_map") |>
+              withSpinner(
+                type = 4,
+                color = "#2C3E50",
+                size = 1
+              ),
+
             full_screen = TRUE
           )
         )
       ),
 
+      # Provider analysis
+      nav_panel(title = "Provider Analysis"),
+      nav_panel(title = "Service Analysis"),
+
       # Line-item data + download
       nav_panel(
-        "Data View",
+        title = "Data View",
+
+        # Show filtered result summaries
+        layout_column_wrap(
+          width = 1 / 4,
+          value_box(
+            title = "Rows",
+            value = textOutput("dv_selected_rows"),
+            showcase = icon("table")
+          ),
+          value_box(
+            title = "Total Paid",
+            value = textOutput("dv_total_paid"),
+            showcase = icon("dollar-sign"),
+            theme = "teal"
+          ),
+          value_box(
+            title = "Claim Lines",
+            value = textOutput("dv_claim_lines"),
+            showcase = icon("list"),
+            theme = "primary"
+          ),
+          value_box(
+            title = "Providers",
+            value = textOutput("dv_provider_count"),
+            showcase = icon("user-doctor"),
+            theme = "warning"
+          )
+        ),
+
+        # Show table
         card(
           card_header(
             div(
@@ -262,9 +326,245 @@ ui <-
             )
           ),
 
+          # Download data file button
+          div(
+            class = "d-flex align-items-center gap-2 mb-2",
+            downloadButton(
+              outputId = "download_claims_preview",
+              label = "Download CSV"
+            ),
+            span(
+              class = "small text-muted",
+              "Downloads are limited to the first 1,000 filtered records to keep the app responsive."
+            )
+          ),
+
           # Table to showing current selection
-          DT::dataTableOutput(outputId = "claims_table"),
+          DT::dataTableOutput(outputId = "claims_table") |>
+            withSpinner(
+              type = 4,
+              color = "#2C3E50",
+              size = 1
+            ),
           full_screen = TRUE
+        )
+      ),
+
+      # About the app
+      nav_panel(
+        title = "About",
+
+        # Organize panes in columns
+        layout_columns(
+          col_widths = c(6, 6),
+
+          # Data overview
+          card(
+            full_screen = TRUE,
+            card_header("Data overview"),
+            accordion(
+              open = "What this app analyzes",
+
+              accordion_panel(
+                title = "What this app analyzes",
+                icon = bs_icon("info-circle", class = "text-primary"),
+                p(
+                  "This application summarizes Wisconsin Medicaid provider spending using the ",
+                  tags$a(
+                    "HHS Medicaid Provider Spending dataset.",
+                    href = "https://opendata.hhs.gov/datasets/medicaid-provider-spending/"
+                  )
+                ),
+                p(
+                  "The data are aggregated from outpatient and professional Medicaid claim lines with populated HCPCS procedure codes."
+                ),
+                div(
+                  class = "alert alert-primary",
+                  strong("Unit of analysis: "),
+                  "billing provider × servicing provider × HCPCS code × month."
+                )
+              ),
+
+              accordion_panel(
+                title = "How spending totals should be interpreted",
+                icon = bs_icon(
+                  "bar-chart-line",
+                  class = "text-primary"
+                ),
+                p(
+                  "Spending totals in this app represent provider-attributed outpatient and professional Medicaid payments."
+                ),
+                p(
+                  "They should not be interpreted as total Wisconsin Medicaid expenditures. Roughly speaking, the ",
+                  tags$a(
+                    "annual Medicaid expenditure in Wisconsin",
+                    href = "https://usafacts.org/answers/how-much-does-medicaid-cost-in-the-us/state/wisconsin/"
+                  ),
+                  " has been around $12-13B (while the ",
+                  tags$a(
+                    "most recent budget",
+                    href = "https://www.wpr.org/news/wisconsin-medicaid-expected-spend-213m-over-state-budget#:~:text=It%E2%80%99s%20primarily%20funded%20through%20federal%20dollars%2C%20with%20the%20program%E2%80%99s%20total%20spending%20projected%20to%20be%20%2436.2%20billion%20over%20the%20two%2Dyear%20budget."
+                  ),
+                  " is closer to $18B). This dataset only accounts for ~$10B in spending over a 7-year period, which amounts to roughly 10% of total Medicaid expenditure over that time period."
+                )
+              )
+            )
+          ),
+
+          # Data scope
+          card(
+            full_screen = TRUE,
+            card_header("Scope of the data"),
+            accordion(
+              open = "What is included",
+
+              accordion_panel(
+                title = "What is included",
+                icon = bs_icon(
+                  "check-circle-fill",
+                  class = "text-success"
+                ),
+                tags$ul(
+                  class = "list-unstyled",
+                  tags$li(
+                    "✅ Outpatient and professional claim-line payments"
+                  ),
+                  tags$li("✅ HCPCS/CPT-coded services"),
+                  tags$li(
+                    "✅ Office visits, ED visits, imaging, labs, procedures, drugs, supplies, and transportation"
+                  ),
+                  tags$li(
+                    "✅ Rows with identifiable billing and servicing provider NPIs"
+                  ),
+                  tags$li(
+                    "✅ Provider-level summaries by month, procedure code, claim lines, beneficiaries, and payment amount"
+                  )
+                ),
+                div(
+                  class = "alert alert-primary",
+                  strong("HCPCS/CPT Codes: "),
+                  p(
+                    "Individual code labels were obtained from the ",
+                    tags$a(
+                      "Medicare Physician Fee Schedule",
+                      href = "https://www.cms.gov/medicare/payment/fee-schedules/physician/pfs-relative-value-files/rvu24a"
+                    ),
+                    "files, and the code categorizations from the ",
+                    tags$a(
+                      "BETOS Classification System",
+                      href = "https://data.cms.gov/provider-summary-by-type-of-service/provider-service-classifications/restructured-betos-classification-system/data"
+                    )
+                  )
+                )
+              ),
+
+              accordion_panel(
+                title = "What is not included",
+                icon = bs_icon(
+                  "exclamation-triangle-fill",
+                  class = "text-danger"
+                ),
+                div(
+                  class = "alert alert-danger",
+                  strong("Important: "),
+                  "This app does not represent total Medicaid program spending."
+                ),
+                tags$ul(
+                  class = "list-unstyled",
+                  tags$li(
+                    "⚠️ Inpatient hospital facility claims, such as DRG-based admissions"
+                  ),
+                  tags$li(
+                    "⚠️ Most long-term care and institutional care spending"
+                  ),
+                  tags$li("⚠️ Managed care capitation payments"),
+                  tags$li(
+                    "⚠️ Supplemental payments and other program-level financial flows"
+                  ),
+                  tags$li(
+                    "⚠️ Claim lines without complete billing and servicing provider attribution"
+                  )
+                )
+              )
+            )
+          ),
+
+          # Provider definitions
+          card(
+            full_screen = TRUE,
+            card_header("Provider attribution"),
+            accordion(
+              open = "Billing vs. servicing providers",
+
+              accordion_panel(
+                title = "Billing vs. servicing providers",
+                icon = bs_icon("people-fill", class = "text-primary"),
+                p(
+                  strong("Billing provider: "),
+                  "the provider or organization responsible for submitting the claim and receiving payment."
+                ),
+                p(
+                  strong("Servicing provider: "),
+                  "the individual or organization associated with delivering the service."
+                ),
+                div(
+                  class = "alert alert-secondary",
+                  "Both billing and servicing providers may be individual clinicians or healthcare organizations."
+                )
+              ),
+
+              accordion_panel(
+                title = "NPI linkage",
+                icon = bs_icon("building", class = "text-primary"),
+                p(
+                  "Provider information is linked using ",
+                  tags$a(
+                    "National Provider Identifier (NPI) records.",
+                    href = "https://download.cms.gov/nppes/NPI_Files.html"
+                  )
+                ),
+                p(
+                  "Provider location is based on NPI registry information and may not perfectly represent where care was delivered."
+                )
+              )
+            )
+          ),
+
+          # Limitations
+          card(
+            full_screen = TRUE,
+            card_header("Important limitations"),
+            accordion(
+              open = "Analytic limitations",
+
+              accordion_panel(
+                title = "Analytic limitations",
+                icon = bs_icon(
+                  "exclamation-circle",
+                  class = "text-warning"
+                ),
+                tags$ul(
+                  tags$li(
+                    "Beneficiary counts are unique within each provider-code-month cell and should not be summed as unique people across rows."
+                  ),
+                  tags$li(
+                    "Claim-line counts represent service lines, not top-level claims or patient encounters."
+                  ),
+                  tags$li(
+                    "Payment totals are best used for relative comparisons and trend analysis within this outpatient/professional slice of Medicaid."
+                  )
+                )
+              ),
+
+              accordion_panel(
+                title = "Recommended interpretation",
+                icon = bs_icon("lightbulb", class = "text-warning"),
+                p(
+                  "This app is best used to explore provider-level and service-level patterns: who is billing, what services are being paid for, how spending changes over time, and which procedures account for the largest payment totals."
+                )
+              )
+            )
+          )
         )
       )
     )

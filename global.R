@@ -13,6 +13,11 @@ library(highcharter)
 library(leaflet)
 library(arrow)
 library(sf)
+library(bsicons)
+library(htmlwidgets)
+library(htmltools)
+library(DT)
+library(shinycssloaders)
 
 ### Import app assets
 
@@ -64,3 +69,70 @@ base_map <-
     ),
     label = ~NAME
   )
+
+cluster_icon_js <- htmlwidgets::JS(
+  "
+  function(cluster) {
+    var markers = cluster.getAllChildMarkers();
+    var metricTotal = 0;
+    var claimLinesTotal = 0;
+
+    markers.forEach(function(marker) {
+      metricTotal += Number(marker.options.metric || 0);
+      claimLinesTotal += Number(marker.options.claimLines || 0);
+    });
+
+    var abbreviatedMetric =
+      metricTotal >= 1000000000
+        ? '$' + (metricTotal / 1000000000).toFixed(1) + 'B'
+        : metricTotal >= 1000000
+          ? '$' + (metricTotal / 1000000).toFixed(1) + 'M'
+          : '$' + Math.round(metricTotal / 1000) + 'K';
+
+    var bgColor =
+      metricTotal >= 100000000 ? '#7f0000' :
+      metricTotal >= 10000000  ? '#d7301f' :
+      metricTotal >= 1000000   ? '#fc8d59' :
+                                  '#fdcc8a';
+
+    var textColor =
+      metricTotal >= 10000000 ? 'white' : '#222';
+
+    var size =
+      metricTotal >= 100000000 ? 76 :
+      metricTotal >= 10000000  ? 68 :
+      metricTotal >= 1000000   ? 60 :
+                                  52;
+
+    var html =
+      '<div style=\"' +
+        'width:' + size + 'px;' +
+        'height:' + size + 'px;' +
+        'border-radius:50%;' +
+        'background:' + bgColor + ';' +
+        'display:flex;' +
+        'flex-direction:column;' +
+        'align-items:center;' +
+        'justify-content:center;' +
+        'color:' + textColor + ';' +
+        'font-weight:bold;' +
+        'line-height:1.05;' +
+        'text-align:center;' +
+        'white-space:nowrap;' +
+        'overflow:visible;' +
+        'border:2px solid white;' +
+        'box-shadow:0 0 4px rgba(0,0,0,0.45);' +
+      '\">' +
+        '<strong style=\"font-size:13px;\">' + markers.length + '</strong>' +
+        '<span style=\"font-size:10px;\">' + abbreviatedMetric + '</span>' +
+      '</div>';
+
+    return new L.DivIcon({
+      html: html,
+      className: '',
+      iconSize: new L.Point(size, size),
+      iconAnchor: new L.Point(size / 2, size / 2)
+    });
+  }
+  "
+)

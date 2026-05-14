@@ -247,6 +247,125 @@ server <-
           )
       })
 
+    ## Data view helpers
+    # Base providers for data viewing
+    provider_lookup_combined <- reactive({
+      bind_rows(
+        providers |>
+          transmute(
+            NPI,
+            ProviderName = str_squish(paste(FirstName, LastName)),
+            ProviderType = "Individual",
+            City,
+            State,
+            Zip,
+            TaxonomyCode,
+            Credentials,
+            Sex,
+            Subpart = NA_character_
+          ),
+        organizations |>
+          transmute(
+            NPI,
+            ProviderName = Name,
+            ProviderType = "Organization",
+            City,
+            State,
+            Zip,
+            TaxonomyCode,
+            Credentials = NA_character_,
+            Sex = NA_character_,
+            Subpart
+          )
+      )
+    })
+    # Enriched data
+    enriched_current_claims <- reactive({
+      provider_lookup <- provider_lookup_combined()
+
+      billing_provider_lookup <-
+        provider_lookup |>
+        rename(
+          BillingProvider = NPI,
+          BillingProviderName = ProviderName,
+          BillingProviderType = ProviderType,
+          BillingProviderCity = City,
+          BillingProviderState = State,
+          BillingProviderZip = Zip,
+          BillingProviderTaxonomyCode = TaxonomyCode,
+          BillingProviderCredentials = Credentials,
+          BillingProviderSex = Sex,
+          BillingProviderSubpart = Subpart
+        )
+
+      servicing_provider_lookup <-
+        provider_lookup |>
+        rename(
+          ServicingProvider = NPI,
+          ServicingProviderName = ProviderName,
+          ServicingProviderType = ProviderType,
+          ServicingProviderCity = City,
+          ServicingProviderState = State,
+          ServicingProviderZip = Zip,
+          ServicingProviderTaxonomyCode = TaxonomyCode,
+          ServicingProviderCredentials = Credentials,
+          ServicingProviderSex = Sex,
+          ServicingProviderSubpart = Subpart
+        )
+
+      hcpcs_descriptor_lookup <-
+        hcpcs_lookup |>
+        transmute(
+          HCPCSCode = Code,
+          HCPCSDescription = Description,
+          HCPCSType = Type,
+          HCPCSCategory = Category,
+          HCPCSSubcategory = Subcategory,
+          HCPCSFamily = Family,
+          HCPCSMajorProcedureIndicator = MajorProcedureIndicator,
+          HCPCSCodeDescription = CodeDescription
+        )
+
+      current_claims() |>
+        left_join(
+          y = billing_provider_lookup,
+          by = "BillingProvider"
+        ) |>
+        left_join(
+          y = servicing_provider_lookup,
+          by = "ServicingProvider"
+        ) |>
+        left_join(
+          y = hcpcs_descriptor_lookup,
+          by = "HCPCSCode"
+        ) |>
+        select(
+          ClaimMonth,
+          BillingProvider,
+          BillingProviderName,
+          BillingProviderType,
+          BillingProviderCity,
+          BillingProviderState,
+          BillingProviderZip,
+          ServicingProvider,
+          ServicingProviderName,
+          ServicingProviderType,
+          ServicingProviderCity,
+          ServicingProviderState,
+          ServicingProviderZip,
+          HCPCSCode,
+          HCPCSDescription,
+          HCPCSType,
+          HCPCSCategory,
+          HCPCSSubcategory,
+          HCPCSFamily,
+          Patients,
+          ClaimLines,
+          PaidAmount,
+          everything()
+        )
+    })
+
     ###### Home page
 
     ### Display KPI's
@@ -502,44 +621,7 @@ server <-
               zoomToBoundsOnClick = TRUE,
               disableClusteringAtZoom = 14,
               maxClusterRadius = 75,
-              iconCreateFunction = htmlwidgets::JS(
-                "function(cluster) {
-                    var markers = cluster.getAllChildMarkers();
-                    var metricTotal = 0;
-                    var claimLinesTotal = 0;
-
-                    markers.forEach(function(marker) {
-                      metricTotal += Number(marker.options.metric || 0);
-                      claimLinesTotal += Number(marker.options.claimLines || 0);
-                    });
-
-                    var abbreviatedMetric =
-                      metricTotal >= 1000000000
-                        ? '$' + (metricTotal / 1000000000).toFixed(1) + 'B'
-                        : metricTotal >= 1000000
-                          ? '$' + (metricTotal / 1000000).toFixed(1) + 'M'
-                          : '$' + Math.round(metricTotal / 1000) + 'K';
-
-                    var html =
-                      '<div style=\"' +
-                        'width:64px;height:44px;' +
-                        'display:flex;flex-direction:column;' +
-                        'align-items:center;justify-content:center;' +
-                        'line-height:1.05;text-align:center;' +
-                        'white-space:nowrap;overflow:visible;' +
-                      '\">' +
-                        '<strong style=\"font-size:13px;\">' + markers.length + '</strong>' +
-                        '<span style=\"font-size:10px;\">' + abbreviatedMetric + '</span>' +
-                      '</div>';
-
-                    return new L.DivIcon({
-                      html: html,
-                      className: 'marker-cluster marker-cluster-large',
-                      iconSize: new L.Point(64, 44),
-                      iconAnchor: new L.Point(32, 22)
-                    });
-                  }"
-              )
+              iconCreateFunction = cluster_icon_js
             )
           )
       },
@@ -547,8 +629,121 @@ server <-
     )
 
     ### Data View
-    # Show data
+    # Metric cards
+    output$dv_selected_rows <- renderText({
+      format(nrow(enriched_current_claims()), big.mark = ",")
+    })
+
+    output$dv_total_paid <- renderText({
+      scales::dollar(sum(enriched_current_claims()$PaidAmount, na.rm = TRUE))
+    })
+
+    output$dv_claim_lines <- renderText({
+      format(
+        sum(enriched_current_claims()$ClaimLines, na.rm = TRUE),
+        big.mark = ","
+      )
+    })
+
+    output$dv_provider_count <- renderText({
+      paste0(
+        n_distinct(enriched_current_claims()$BillingProvider),
+        " billing / ",
+        n_distinct(enriched_current_claims()$ServicingProvider),
+        " servicing"
+      )
+    })
+    # Show data in table
     output$claims_table <- DT::renderDataTable({
-      current_claims() |> sample_n(min(1000, nrow(current_claims())))
+      display_data <-
+        enriched_current_claims() |>
+        slice_head(n = 1000)
+
+      DT::datatable(
+        display_data,
+        rownames = FALSE,
+        filter = "top",
+        options = list(
+          pageLength = 25,
+          scrollX = TRUE,
+          deferRender = TRUE
+        )
+      ) |>
+        DT::formatCurrency(
+          columns = "PaidAmount",
+          currency = "$",
+          digits = 0
+        )
+    })
+    # Download the data
+    output$download_claims_preview <- downloadHandler(
+      filename = function() {
+        paste0("medicaid_claims_preview_", Sys.Date(), ".csv")
+      },
+      content = function(file) {
+        download_data <-
+          enriched_current_claims() |>
+          slice_head(n = 1000)
+
+        write.csv(
+          download_data,
+          file = file,
+          row.names = FALSE,
+          na = ""
+        )
+      }
+    )
+
+    ## Additional data summaries (not currently used)
+    spending_by_hcpcs <- reactive({
+      enriched_current_claims() |>
+        summarize(
+          ClaimRows = n(),
+          Patients = sum(Patients, na.rm = TRUE),
+          ClaimLines = sum(ClaimLines, na.rm = TRUE),
+          PaidAmount = sum(PaidAmount, na.rm = TRUE),
+          .by = c(HCPCSCode, HCPCSDescription, HCPCSCategory)
+        ) |>
+        arrange(desc(PaidAmount))
+    })
+
+    spending_by_billing_provider <- reactive({
+      enriched_current_claims() |>
+        summarize(
+          ClaimRows = n(),
+          Patients = sum(Patients, na.rm = TRUE),
+          ClaimLines = sum(ClaimLines, na.rm = TRUE),
+          PaidAmount = sum(PaidAmount, na.rm = TRUE),
+          .by = c(BillingProvider, BillingProviderName, BillingProviderType)
+        ) |>
+        arrange(desc(PaidAmount))
+    })
+
+    spending_by_servicing_provider <- reactive({
+      enriched_current_claims() |>
+        summarize(
+          ClaimRows = n(),
+          Patients = sum(Patients, na.rm = TRUE),
+          ClaimLines = sum(ClaimLines, na.rm = TRUE),
+          PaidAmount = sum(PaidAmount, na.rm = TRUE),
+          .by = c(
+            ServicingProvider,
+            ServicingProviderName,
+            ServicingProviderType
+          )
+        ) |>
+        arrange(desc(PaidAmount))
+    })
+
+    spending_by_month <- reactive({
+      enriched_current_claims() |>
+        summarize(
+          ClaimRows = n(),
+          Patients = sum(Patients, na.rm = TRUE),
+          ClaimLines = sum(ClaimLines, na.rm = TRUE),
+          PaidAmount = sum(PaidAmount, na.rm = TRUE),
+          .by = ClaimMonth
+        ) |>
+        arrange(ClaimMonth)
     })
   }
