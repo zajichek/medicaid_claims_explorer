@@ -434,7 +434,6 @@ server <-
         PaidPerClaimLine = "Paid per Claim Line"
       )[[input$pa_metric]]
     })
-
     provider_top_summary <- reactive({
       req(input$pa_metric, input$pa_top_n)
 
@@ -442,6 +441,110 @@ server <-
         mutate(SelectedMetric = .data[[input$pa_metric]]) |>
         arrange(desc(SelectedMetric)) |>
         slice_head(n = as.integer(input$pa_top_n))
+    })
+
+    ## Code analysis objects
+    # Copy of the enriched data
+    code_analysis_claims <- reactive({
+      enriched_current_claims()
+    })
+    # Code groupings
+    available_code_groupings <- reactive({
+      candidate_groupings <- c(
+        "Individual Code" = "HCPCSCode",
+        "Code Type" = "HCPCSType",
+        "Category" = "HCPCSCategory",
+        "Subcategory" = "HCPCSSubcategory",
+        "Family" = "HCPCSFamily",
+        "Major Procedure?" = "HCPCSMajorProcedureIndicator"
+      )
+      candidate_groupings[
+        candidate_groupings %in% names(code_analysis_claims())
+      ]
+    })
+    observeEvent(available_code_groupings(), {
+      choices <- available_code_groupings()
+
+      updateSelectInput(
+        session = session,
+        inputId = "ca_grouping",
+        choices = choices,
+        selected = if ("HCPCSCategory" %in% choices) {
+          "HCPCSCategory"
+        } else {
+          choices[[1]]
+        }
+      )
+    })
+    selected_code_group_col <- reactive({
+      req(input$ca_grouping)
+      validate(
+        need(
+          input$ca_grouping %in% available_code_groupings(),
+          "Selected grouping is not available."
+        )
+      )
+
+      input$ca_grouping
+    })
+    code_metric_label <- reactive({
+      c(
+        PaidAmount = "Total Paid",
+        ClaimLines = "Claim Lines",
+        Patients = "Patients",
+        PaidPerClaimLine = "Paid per Claim Line",
+        BillingProviders = "Billing Providers",
+        ServicingProviders = "Servicing Providers"
+      )[[input$ca_metric]]
+    })
+    # Code data summaries
+    code_summary <- reactive({
+      group_col <- selected_code_group_col()
+
+      code_analysis_claims() |>
+        mutate(
+          CodeGroupValue = coalesce(
+            as.character(.data[[group_col]]),
+            "[Missing]"
+          )
+        ) |>
+        summarize(
+          GroupLabel = if (group_col == "HCPCSCode") {
+            first(HCPCSCodeDescription)
+          } else {
+            first(CodeGroupValue)
+          },
+          GroupDescription = if (group_col == "HCPCSCode") {
+            first(HCPCSDescription)
+          } else {
+            first(CodeGroupValue)
+          },
+          DistinctCodes = n_distinct(HCPCSCode),
+          BillingProviders = n_distinct(BillingProvider),
+          ServicingProviders = n_distinct(ServicingProvider),
+          ClaimRows = n(),
+          Patients = sum(Patients, na.rm = TRUE),
+          ClaimLines = sum(ClaimLines, na.rm = TRUE),
+          PaidAmount = sum(PaidAmount, na.rm = TRUE),
+          .by = CodeGroupValue
+        ) |>
+        mutate(
+          GroupingColumn = group_col,
+          PaidPerClaimLine = if_else(
+            ClaimLines > 0,
+            PaidAmount / ClaimLines,
+            NA_real_
+          )
+        )
+    })
+    # Top N summary
+    code_top_summary <- reactive({
+      req(input$ca_metric, input$ca_top_n)
+
+      code_summary() |>
+        mutate(SelectedMetric = .data[[input$ca_metric]]) |>
+        arrange(desc(SelectedMetric)) |>
+        slice_head(n = as.integer(input$ca_top_n))
     })
 
     ###### Home page
@@ -866,6 +969,192 @@ server <-
           PaidPerClaimLine,
           DistinctHCPCS,
           DistinctCounterparties
+        )
+
+      DT::datatable(
+        table_data,
+        rownames = FALSE,
+        filter = "top",
+        options = list(
+          pageLength = 25,
+          scrollX = TRUE,
+          deferRender = TRUE
+        )
+      ) |>
+        DT::formatCurrency(
+          columns = c("PaidAmount", "PaidPerClaimLine"),
+          currency = "$",
+          digits = 0
+        )
+    })
+
+    ### HCPCS Analysis
+
+    # Metric cards
+    output$ca_code_count <- renderText({
+      format(n_distinct(code_analysis_claims()$HCPCSCode), big.mark = ",")
+    })
+
+    output$ca_group_count <- renderText({
+      format(nrow(code_summary()), big.mark = ",")
+    })
+
+    output$ca_total_paid <- renderText({
+      scales::dollar(sum(code_summary()$PaidAmount, na.rm = TRUE))
+    })
+
+    output$ca_claim_lines <- renderText({
+      format(sum(code_summary()$ClaimLines, na.rm = TRUE), big.mark = ",")
+    })
+
+    output$ca_median_paid_per_line <- renderText({
+      scales::dollar(median(code_summary()$PaidPerClaimLine, na.rm = TRUE))
+    })
+
+    # Bubble chart
+    output$ca_code_scatter <- renderHighchart({
+      chart_data <-
+        code_summary() |>
+        mutate(
+          SelectedMetric = .data[[input$ca_metric]],
+          BubbleSize = pmax(Patients, 1),
+          TooltipText = paste0(
+            "<b>",
+            GroupLabel,
+            "</b>",
+            "<br>Grouping: ",
+            GroupingColumn,
+            "<br>Description: ",
+            GroupDescription,
+            "<br>Total Paid: ",
+            scales::dollar(PaidAmount),
+            "<br>Claim Lines: ",
+            format(ClaimLines, big.mark = ","),
+            "<br>Patients: ",
+            format(Patients, big.mark = ","),
+            "<br>Paid / Claim Line: ",
+            scales::dollar(PaidPerClaimLine),
+            "<br>Billing Providers: ",
+            BillingProviders,
+            "<br>Servicing Providers: ",
+            ServicingProviders,
+            "<br>Distinct Codes: ",
+            DistinctCodes
+          )
+        )
+
+      hchart(
+        chart_data,
+        "bubble",
+        hcaes(
+          x = ClaimLines,
+          y = SelectedMetric,
+          size = BubbleSize,
+          name = GroupLabel
+        )
+      ) |>
+        hc_title(text = NULL) |>
+        hc_xAxis(
+          title = list(text = "Claim Lines")
+          # Optional if values are very skewed:
+          # type = "logarithmic"
+        ) |>
+        hc_yAxis(
+          title = list(text = code_metric_label())
+          # Optional if values are very skewed and always positive:
+          # type = "logarithmic"
+        ) |>
+        hc_tooltip(
+          useHTML = TRUE,
+          pointFormatter = htmlwidgets::JS(
+            "function() { return this.options.TooltipText || this.name; }"
+          )
+        ) |>
+        hc_plotOptions(
+          bubble = list(
+            minSize = 4,
+            maxSize = 36,
+            marker = list(
+              fillOpacity = 0.65,
+              lineWidth = 0
+            )
+          )
+        )
+    })
+
+    # Top N codes
+    output$ca_top_code_bar <- renderHighchart({
+      chart_data <-
+        code_top_summary() |>
+        arrange(SelectedMetric) |>
+        mutate(
+          GroupLabel = forcats::fct_inorder(GroupLabel),
+          TooltipText = paste0(
+            "<b>",
+            GroupLabel,
+            "</b>",
+            "<br>Grouping: ",
+            GroupingColumn,
+            "<br>Description: ",
+            GroupDescription,
+            "<br>",
+            code_metric_label(),
+            ": ",
+            if (input$ca_metric %in% c("PaidAmount", "PaidPerClaimLine")) {
+              scales::dollar(SelectedMetric)
+            } else {
+              format(SelectedMetric, big.mark = ",")
+            },
+            "<br>Total Paid: ",
+            scales::dollar(PaidAmount),
+            "<br>Claim Lines: ",
+            format(ClaimLines, big.mark = ","),
+            "<br>Patients: ",
+            format(Patients, big.mark = ","),
+            "<br>Billing Providers: ",
+            BillingProviders,
+            "<br>Servicing Providers: ",
+            ServicingProviders,
+            "<br>Distinct Codes: ",
+            DistinctCodes
+          )
+        )
+
+      hchart(
+        chart_data,
+        "bar",
+        hcaes(
+          x = GroupLabel,
+          y = SelectedMetric
+        )
+      ) |>
+        hc_title(text = NULL) |>
+        hc_xAxis(title = list(text = NULL)) |>
+        hc_yAxis(title = list(text = code_metric_label())) |>
+        hc_tooltip(
+          useHTML = TRUE,
+          pointFormatter = htmlwidgets::JS(
+            "function() { return this.options.TooltipText || this.category; }"
+          )
+        )
+    })
+
+    # Data table
+    output$ca_code_table <- DT::renderDataTable({
+      table_data <-
+        code_top_summary() |>
+        select(
+          GroupingColumn,
+          CodeGroupValue,
+          GroupLabel,
+          GroupDescription,
+          PaidAmount,
+          ClaimLines,
+          Patients,
+          PaidPerClaimLine,
+          BillingProviders,
+          ServicingProviders,
+          DistinctCodes
         )
 
       DT::datatable(

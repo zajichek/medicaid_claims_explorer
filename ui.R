@@ -432,7 +432,174 @@ ui <-
       ),
 
       # HCPCS Code analysis
-      nav_panel(title = "Service Analysis"),
+      nav_panel(
+        title = "HCPCS Code Analysis",
+
+        # Match Provider Analysis: controls and metrics share the first row.
+        layout_columns(
+          col_widths = c(4, 8),
+
+          # Controls for this HCPCS tab only.
+          accordion(
+            open = FALSE,
+            accordion_panel(
+              title = "Code Analysis Controls",
+              icon = icon("sliders"),
+
+              ## Page-specific selectors
+
+              # Grouping level for charts and table.
+              selectInput(
+                inputId = "ca_grouping",
+                label = "Group codes by",
+                choices = c(
+                  "Category" = "HCPCSCategory",
+                  "Individual Code" = "HCPCSCode",
+                  "Code Type" = "HCPCSType",
+                  "Subcategory" = "HCPCSSubcategory",
+                  "Family" = "HCPCSFamily",
+                  "Major Procedure?" = "HCPCSMajorProcedureIndicator"
+                ),
+                selected = "HCPCSCategory"
+              ),
+
+              # Metric used for ranking and chart y-axis.
+              selectInput(
+                inputId = "ca_metric",
+                label = "Metric",
+                choices = c(
+                  "Total Paid" = "PaidAmount",
+                  "Claim Lines" = "ClaimLines",
+                  "Patients" = "Patients",
+                  "Paid per Claim Line" = "PaidPerClaimLine",
+                  "Billing Providers" = "BillingProviders",
+                  "Servicing Providers" = "ServicingProviders"
+                ),
+                selected = "PaidAmount"
+              ),
+
+              # Number of code groups to show in the bar chart/table.
+              selectInput(
+                inputId = "ca_top_n",
+                label = "Top groups",
+                choices = c(10, 25, 50, 100),
+                selected = 25
+              )
+            )
+          ),
+
+          # Metrics for this HCPCS tab only.
+          # This mirrors Provider Analysis Metrics while using code-specific outputs.
+          accordion(
+            open = FALSE,
+            accordion_panel(
+              title = "Code Analysis Metrics",
+              icon = icon("chart-area"),
+
+              ## Page-specific summary cards scoped to the currently selected global
+              ## filters and local grouping choice.
+              layout_columns(
+                col_widths = c(4, 4, 4),
+
+                # Organize compact metric cards in two rows.
+                layout_column_wrap(
+                  width = 1,
+                  value_box(
+                    title = "Codes",
+                    value = textOutput("ca_code_count"),
+                    showcase = icon("barcode")
+                  ),
+                  value_box(
+                    title = "Groups",
+                    value = textOutput("ca_group_count"),
+                    showcase = icon("layer-group")
+                  )
+                ),
+                layout_column_wrap(
+                  width = 1,
+                  value_box(
+                    title = "Total Paid",
+                    value = textOutput("ca_total_paid"),
+                    showcase = icon("dollar-sign"),
+                    theme = "teal"
+                  ),
+                  value_box(
+                    title = "Claim Lines",
+                    value = textOutput("ca_claim_lines"),
+                    showcase = icon("list"),
+                    theme = "primary"
+                  )
+                ),
+                layout_column_wrap(
+                  width = 1,
+                  value_box(
+                    title = "Median Paid / Line",
+                    value = textOutput("ca_median_paid_per_line"),
+                    showcase = icon("chart-line"),
+                    theme = "warning"
+                  )
+                )
+              )
+            )
+          )
+        ),
+
+        # Match Provider Analysis: wide pattern chart + narrower ranking chart.
+        layout_columns(
+          col_widths = c(7, 5),
+
+          # Bubble/scatter chart for code groups.
+          card(
+            card_header(
+              div(
+                icon("chart-line"),
+                "Code Volume vs. Spend"
+              )
+            ),
+            highchartOutput(outputId = "ca_code_scatter") |>
+              withSpinner(
+                type = 4,
+                color = "#2C3E50",
+                size = 1
+              ),
+            full_screen = TRUE
+          ),
+
+          # Ranking chart based on selected metric/grouping.
+          card(
+            card_header(
+              div(
+                icon("ranking-star"),
+                "Top Codes / Code Groups"
+              )
+            ),
+            highchartOutput(outputId = "ca_top_code_bar") |>
+              withSpinner(
+                type = 4,
+                color = "#2C3E50",
+                size = 1
+              ),
+            full_screen = TRUE
+          )
+        ),
+
+        # Match Provider Analysis: full-width table below charts.
+        card(
+          card_header(
+            div(
+              icon("table"),
+              "Code Summary Table"
+            )
+          ),
+          DT::dataTableOutput(outputId = "ca_code_table") |>
+            withSpinner(
+              type = 4,
+              color = "#2C3E50",
+              size = 1
+            ),
+          full_screen = TRUE
+        )
+      ),
 
       # Line-item data + download
       nav_panel(
