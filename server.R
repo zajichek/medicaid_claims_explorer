@@ -366,6 +366,84 @@ server <-
         )
     })
 
+    ## Provider-analysis objects
+    # Copy of enriched data
+    provider_analysis_claims <- reactive({
+      enriched_current_claims()
+    })
+    # Summarize provider data based on selected context
+    provider_summary <- reactive({
+      req(input$pa_provider_role)
+
+      if (input$pa_provider_role == "billing") {
+        temp_provider_analysis_claims_summary <-
+          provider_analysis_claims() |>
+          summarize(
+            ProviderName = first(BillingProviderName),
+            ProviderType = first(BillingProviderType),
+            City = first(BillingProviderCity),
+            State = first(BillingProviderState),
+            Zip = first(BillingProviderZip),
+            ClaimRows = n(),
+            Patients = sum(Patients, na.rm = TRUE),
+            ClaimLines = sum(ClaimLines, na.rm = TRUE),
+            PaidAmount = sum(PaidAmount, na.rm = TRUE),
+            DistinctHCPCS = n_distinct(HCPCSCode),
+            DistinctCounterparties = n_distinct(ServicingProvider),
+            .by = BillingProvider
+          ) |>
+          rename(NPI = BillingProvider)
+      } else {
+        temp_provider_analysis_claims_summary <-
+          provider_analysis_claims() |>
+          summarize(
+            ProviderName = first(ServicingProviderName),
+            ProviderType = first(ServicingProviderType),
+            City = first(ServicingProviderCity),
+            State = first(ServicingProviderState),
+            Zip = first(ServicingProviderZip),
+            ClaimRows = n(),
+            Patients = sum(Patients, na.rm = TRUE),
+            ClaimLines = sum(ClaimLines, na.rm = TRUE),
+            PaidAmount = sum(PaidAmount, na.rm = TRUE),
+            DistinctHCPCS = n_distinct(HCPCSCode),
+            DistinctCounterparties = n_distinct(BillingProvider),
+            .by = ServicingProvider
+          ) |>
+          rename(NPI = ServicingProvider)
+      }
+      temp_provider_analysis_claims_summary |>
+        mutate(
+          PaidPerClaimLine = if_else(
+            ClaimLines > 0,
+            PaidAmount / ClaimLines,
+            NA_real_
+          ),
+          ProviderLabel = case_when(
+            !is.na(ProviderName) & ProviderName != "" ~ ProviderName,
+            TRUE ~ NPI
+          )
+        )
+    })
+    # More provider summary helpers
+    provider_metric_label <- reactive({
+      c(
+        PaidAmount = "Total Paid",
+        ClaimLines = "Claim Lines",
+        Patients = "Patients",
+        PaidPerClaimLine = "Paid per Claim Line"
+      )[[input$pa_metric]]
+    })
+
+    provider_top_summary <- reactive({
+      req(input$pa_metric, input$pa_top_n)
+
+      provider_summary() |>
+        mutate(SelectedMetric = .data[[input$pa_metric]]) |>
+        arrange(desc(SelectedMetric)) |>
+        slice_head(n = as.integer(input$pa_top_n))
+    })
+
     ###### Home page
 
     ### Display KPI's
@@ -627,6 +705,185 @@ server <-
       },
       ignoreInit = FALSE
     )
+
+    ### Provider Analysis
+
+    # Metric cards
+    output$pa_provider_count <- renderText({
+      format(nrow(provider_summary()), big.mark = ",")
+    })
+    output$pa_total_paid <- renderText({
+      scales::dollar(sum(provider_summary()$PaidAmount, na.rm = TRUE))
+    })
+    output$pa_claim_lines <- renderText({
+      format(sum(provider_summary()$ClaimLines, na.rm = TRUE), big.mark = ",")
+    })
+    output$pa_median_paid_per_line <- renderText({
+      scales::dollar(
+        median(provider_summary()$PaidPerClaimLine, na.rm = TRUE)
+      )
+    })
+
+    # Bubble chart
+    output$pa_provider_scatter <- renderHighchart({
+      chart_data <-
+        provider_summary() |>
+        mutate(
+          SelectedMetric = .data[[input$pa_metric]],
+          BubbleSize = pmax(Patients, 1),
+          TooltipText = paste0(
+            "<b>",
+            ProviderLabel,
+            "</b>",
+            "<br>NPI: ",
+            NPI,
+            "<br>Type: ",
+            ProviderType,
+            "<br>Location: ",
+            City,
+            ", ",
+            State,
+            " ",
+            Zip,
+            "<br>Total Paid: ",
+            scales::dollar(PaidAmount),
+            "<br>Claim Lines: ",
+            format(ClaimLines, big.mark = ","),
+            "<br>Patients: ",
+            format(Patients, big.mark = ","),
+            "<br>Paid / Claim Line: ",
+            scales::dollar(PaidPerClaimLine),
+            "<br>Distinct HCPCS: ",
+            DistinctHCPCS
+          )
+        )
+
+      hchart(
+        chart_data,
+        "bubble",
+        hcaes(
+          x = ClaimLines,
+          y = SelectedMetric,
+          size = BubbleSize,
+          name = ProviderLabel,
+          color = ProviderType
+        )
+      ) |>
+        hc_title(text = NULL) |>
+        hc_xAxis(
+          title = list(text = "Claim Lines")
+          # Optional if values are very skewed:
+          # type = "logarithmic"
+        ) |>
+        hc_yAxis(
+          title = list(text = provider_metric_label())
+          # Optional if values are very skewed and metric is always positive:
+          # type = "logarithmic"
+        ) |>
+        hc_tooltip(
+          useHTML = TRUE,
+          pointFormatter = htmlwidgets::JS(
+            "function() { return this.options.TooltipText || this.name; }"
+          )
+        ) |>
+        hc_plotOptions(
+          bubble = list(
+            minSize = 4,
+            maxSize = 36,
+            marker = list(
+              fillOpacity = 0.65,
+              lineWidth = 0
+            )
+          )
+        )
+    })
+
+    # Bar chart
+    output$pa_top_provider_bar <- renderHighchart({
+      chart_data <-
+        provider_top_summary() |>
+        arrange(SelectedMetric) |>
+        mutate(
+          ProviderLabel = forcats::fct_inorder(ProviderLabel),
+          TooltipText = paste0(
+            "<b>",
+            ProviderLabel,
+            "</b>",
+            "<br>NPI: ",
+            NPI,
+            "<br>Type: ",
+            ProviderType,
+            "<br>",
+            provider_metric_label(),
+            ": ",
+            if (input$pa_metric %in% c("PaidAmount", "PaidPerClaimLine")) {
+              scales::dollar(SelectedMetric)
+            } else {
+              format(SelectedMetric, big.mark = ",")
+            },
+            "<br>Total Paid: ",
+            scales::dollar(PaidAmount),
+            "<br>Claim Lines: ",
+            format(ClaimLines, big.mark = ","),
+            "<br>Patients: ",
+            format(Patients, big.mark = ",")
+          )
+        )
+
+      hchart(
+        chart_data,
+        "bar",
+        hcaes(
+          x = ProviderLabel,
+          y = SelectedMetric
+        )
+      ) |>
+        hc_title(text = NULL) |>
+        hc_xAxis(title = list(text = NULL)) |>
+        hc_yAxis(title = list(text = provider_metric_label())) |>
+        hc_tooltip(
+          useHTML = TRUE,
+          pointFormatter = htmlwidgets::JS(
+            "function() { return this.options.TooltipText || this.category; }"
+          )
+        )
+    })
+
+    # Table
+    output$pa_provider_table <- DT::renderDataTable({
+      table_data <-
+        provider_top_summary() |>
+        select(
+          NPI,
+          ProviderName,
+          ProviderType,
+          City,
+          State,
+          Zip,
+          PaidAmount,
+          ClaimLines,
+          Patients,
+          PaidPerClaimLine,
+          DistinctHCPCS,
+          DistinctCounterparties
+        )
+
+      DT::datatable(
+        table_data,
+        rownames = FALSE,
+        filter = "top",
+        options = list(
+          pageLength = 25,
+          scrollX = TRUE,
+          deferRender = TRUE
+        )
+      ) |>
+        DT::formatCurrency(
+          columns = c("PaidAmount", "PaidPerClaimLine"),
+          currency = "$",
+          digits = 0
+        )
+    })
 
     ### Data View
     # Metric cards

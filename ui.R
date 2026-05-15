@@ -46,7 +46,7 @@ ui <-
 
     # Sidebar holds configuration
     sidebar = sidebar(
-      open = TRUE,
+      open = FALSE,
       width = 350,
 
       h2("Filters", style = "text-align:center"),
@@ -282,7 +282,156 @@ ui <-
       ),
 
       # Provider analysis
-      nav_panel(title = "Provider Analysis"),
+      nav_panel(
+        title = "Provider Analysis",
+
+        # Columns for controls/section metrics
+        layout_columns(
+          col_widths = c(4, 8),
+
+          # Controls for this provider tab only
+          accordion(
+            open = FALSE,
+            accordion_panel(
+              title = "Provider Analysis Controls",
+              icon = icon("sliders"),
+
+              ## Page-specific selectors
+
+              # Role to analyze
+              radioButtons(
+                inputId = "pa_provider_role",
+                label = "Provider role",
+                choices = c(
+                  "Billing Provider" = "billing",
+                  "Servicing Provider" = "servicing"
+                ),
+                selected = "billing",
+                inline = TRUE
+              ),
+
+              # Metric to analyze
+              selectInput(
+                inputId = "pa_metric",
+                label = "Metric",
+                choices = c(
+                  "Total Paid" = "PaidAmount",
+                  "Claim Lines" = "ClaimLines",
+                  "Patients" = "Patients",
+                  "Paid per Claim Line" = "PaidPerClaimLine"
+                ),
+                selected = "PaidAmount"
+              ),
+
+              # Number of providers to assess
+              selectInput(
+                inputId = "pa_top_n",
+                label = "Top providers",
+                choices = c(10, 25, 50, 100),
+                selected = 25
+              )
+            )
+          ),
+
+          # Metrics for this provider tab only
+          accordion(
+            open = FALSE,
+            accordion_panel(
+              title = "Provider Analysis Metrics",
+              icon = icon("chart-area"),
+
+              ## Page-specific summary cards scoped to the currently selected global filters and local role.
+              layout_columns(
+                col_widths = c(6, 6),
+
+                # Organize in a 2 X 2 grid
+                layout_column_wrap(
+                  width = 1,
+                  value_box(
+                    title = "Providers",
+                    value = textOutput("pa_provider_count"),
+                    showcase = icon("user-doctor")
+                  ),
+                  value_box(
+                    title = "Total Paid",
+                    value = textOutput("pa_total_paid"),
+                    showcase = icon("dollar-sign"),
+                    theme = "teal"
+                  )
+                ),
+                layout_column_wrap(
+                  width = 1,
+                  value_box(
+                    title = "Claim Lines",
+                    value = textOutput("pa_claim_lines"),
+                    showcase = icon("list"),
+                    theme = "primary"
+                  ),
+                  value_box(
+                    title = "Median Paid / Line",
+                    value = textOutput("pa_median_paid_per_line"),
+                    showcase = icon("chart-line"),
+                    theme = "warning"
+                  )
+                )
+              )
+            )
+          )
+        ),
+
+        # Provider result output panels
+        layout_columns(
+          col_widths = c(7, 5),
+
+          # Scatterplot/bubble chart
+          card(
+            card_header(
+              div(
+                icon("chart-line"),
+                "Provider Spending Pattern"
+              )
+            ),
+            highchartOutput(outputId = "pa_provider_scatter") |>
+              withSpinner(
+                type = 4,
+                color = "#2C3E50",
+                size = 1
+              ),
+            full_screen = TRUE
+          ),
+
+          # Provider rankings based on selected metric
+          card(
+            card_header(
+              div(
+                icon("ranking-star"),
+                "Top Providers"
+              )
+            ),
+            highchartOutput(outputId = "pa_top_provider_bar") |>
+              withSpinner(
+                type = 4,
+                color = "#2C3E50",
+                size = 1
+              ),
+            full_screen = TRUE
+          )
+        ),
+
+        # Provider level summary table
+        card(
+          card_header(
+            div(
+              icon("table"),
+              "Provider Summary"
+            )
+          ),
+          DT::dataTableOutput(outputId = "pa_provider_table"),
+          full_screen = TRUE
+        )
+      ),
+
+      # HCPCS Code analysis
       nav_panel(title = "Service Analysis"),
 
       # Line-item data + download
