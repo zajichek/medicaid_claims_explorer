@@ -600,6 +600,13 @@ server <-
     # Spend over time
     output$spend_over_time <-
       renderHighchart({
+        validate(
+          need(
+            nrow(current_claims()) > 0,
+            "No records match the current filters. Try broadening the date, provider, or HCPCS selections."
+          )
+        )
+
         current_claims() |>
 
           # Compute total by month

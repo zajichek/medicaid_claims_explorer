@@ -44,12 +44,27 @@ ui <-
 
     window_title = "Wisconsin Medicaid Provider Explorer",
 
+    tags$style(HTML(
+      "
+  .bslib-card {
+    margin-bottom: 0.75rem;
+  }
+  .value-box {
+    min-height: 7rem;
+  }
+"
+    )),
+
     # Sidebar holds configuration
     sidebar = sidebar(
       open = FALSE,
       width = 350,
 
-      h2("Filters", style = "text-align:center"),
+      h2("Global Filters", style = "text-align:center"),
+      div(
+        class = "small text-muted text-center mb-3",
+        "These filters update every tab in the app."
+      ),
 
       # Claims date range
       sliderTextInput(
@@ -82,10 +97,14 @@ ui <-
               # Search as service or billing provider
               checkboxGroupInput(
                 inputId = "individual_provider_roles",
-                label = "Provider Role",
+                label = "Match selected providers as",
                 choices = c("Billing", "Servicing"),
                 selected = c("Billing", "Servicing"),
                 inline = TRUE
+              ),
+              div(
+                class = "small text-muted mb-2",
+                "Choose whether selected NPIs should match billing provider, servicing provider, or both."
               ),
 
               # Simultaneously filtering on columns
@@ -122,10 +141,14 @@ ui <-
               # Search as service or billing provider
               checkboxGroupInput(
                 inputId = "organization_provider_roles",
-                label = "Provider Role",
+                label = "Match selected providers as",
                 choices = c("Billing", "Servicing"),
                 selected = c("Billing", "Servicing"),
                 inline = TRUE
+              ),
+              div(
+                class = "small text-muted mb-2",
+                "Choose whether selected NPIs should match billing provider, servicing provider, or both."
               ),
 
               # Simultaneously filtering on columns
@@ -158,6 +181,10 @@ ui <-
           icon = icon("list"),
 
           # Simultaneously filtering on columns
+          div(
+            class = "small text-muted mb-2",
+            "HCPCS includes CPT procedure codes and other service, supply, drug, and transportation codes."
+          ),
           select_group_ui(
             id = "codes",
             params = list(
@@ -187,6 +214,14 @@ ui <-
       nav_panel(
         title = "Home",
 
+        div(
+          class = "small text-muted mb-2",
+          icon("circle-info"),
+          HTML(
+            "<strong>Current selection:</strong> Metrics, charts, and map reflect the global filters in the sidebar."
+          )
+        ),
+
         # KPI metrics
         layout_column_wrap(
           width = 1 / 3,
@@ -203,7 +238,7 @@ ui <-
 
           # Provder count (billing)
           value_box(
-            title = "Providers Paid",
+            title = "Billing Providers",
             value = htmlOutput(outputId = "billing_provider_count"),
             showcase = icon("user-doctor", class = "fa-3x"),
             theme = "warning",
@@ -244,6 +279,10 @@ ui <-
                   color = "#2C3E50",
                   size = 1
                 ),
+              div(
+                class = "small text-muted mt-2",
+                "Monthly totals are based on filtered claim-line payments by payment month."
+              ),
               full_screen = TRUE
             )
           ),
@@ -260,12 +299,12 @@ ui <-
             div(
               class = "small text-muted",
               style = "
-      padding: 0.5rem 1rem 0rem 1rem;
-      line-height: 1.3;
-    ",
+    padding: 0.5rem 1rem 0rem 1rem;
+    line-height: 1.3;
+  ",
               icon("circle-info"),
               HTML(
-                "<strong>Map Tip:</strong> Click clusters to progressively zoom and explore provider spending by location. Marker size and color reflect the total spend amount."
+                "<strong>Map Tip:</strong> Click clusters to zoom into provider locations. Marker color and size reflect total paid amount."
               )
             ),
 
@@ -295,6 +334,11 @@ ui <-
             accordion_panel(
               title = "Provider Analysis Controls",
               icon = icon("sliders"),
+
+              div(
+                class = "small text-muted mb-2",
+                "These controls change this tab only; global filters remain in the sidebar."
+              ),
 
               ## Page-specific selectors
 
@@ -388,7 +432,7 @@ ui <-
             card_header(
               div(
                 icon("chart-line"),
-                "Provider Spending Pattern"
+                "Provider Volume vs. Spend"
               )
             ),
             highchartOutput(outputId = "pa_provider_scatter") |>
@@ -426,6 +470,10 @@ ui <-
               "Provider Summary"
             )
           ),
+          div(
+            class = "small text-muted mb-2",
+            "Provider-level summary for the selected role and metric."
+          ),
           DT::dataTableOutput(outputId = "pa_provider_table"),
           full_screen = TRUE
         )
@@ -433,7 +481,7 @@ ui <-
 
       # HCPCS Code analysis
       nav_panel(
-        title = "HCPCS Code Analysis",
+        title = "Code Analysis",
 
         # Match Provider Analysis: controls and metrics share the first row.
         layout_columns(
@@ -445,6 +493,11 @@ ui <-
             accordion_panel(
               title = "Code Analysis Controls",
               icon = icon("sliders"),
+
+              div(
+                class = "small text-muted mb-2",
+                "These controls change this tab only; global filters remain in the sidebar."
+              ),
 
               ## Page-specific selectors
 
@@ -591,6 +644,10 @@ ui <-
               "Code Summary Table"
             )
           ),
+          div(
+            class = "small text-muted mb-2",
+            "Code or code-group summary based on the selected grouping level."
+          ),
           DT::dataTableOutput(outputId = "ca_code_table") |>
             withSpinner(
               type = 4,
@@ -656,6 +713,10 @@ ui <-
           ),
 
           # Table to showing current selection
+          div(
+            class = "small text-muted mb-2",
+            "Preview of enriched filtered claim records. Use column filters to narrow the displayed rows."
+          ),
           DT::dataTableOutput(outputId = "claims_table") |>
             withSpinner(
               type = 4,
